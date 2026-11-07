@@ -16,6 +16,8 @@ export type Profile = {
   email: string;
   role: Role;
   department_id: string | null;
+  must_change_password?: boolean;
+  is_active?: boolean;
   tenant?: { name: string; short_name: string } | null;
   department?: { name: string; code: string } | null;
 };

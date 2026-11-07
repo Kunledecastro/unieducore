@@ -5,8 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, roleHome, type Profile, type Role } from "@/lib/supabase";
 
-type Ctx = { profile: Profile | null; loading: boolean; signOut: () => Promise<void> };
-const AuthCtx = createContext<Ctx>({ profile: null, loading: true, signOut: async () => {} });
+type Ctx = { profile: Profile | null; loading: boolean; signOut: () => Promise<void>; refresh: () => Promise<void> };
+const AuthCtx = createContext<Ctx>({ profile: null, loading: true, signOut: async () => {}, refresh: async () => {} });
 export const useAuth = () => useContext(AuthCtx);
 
 async function loadProfile(): Promise<Profile | null> {
@@ -14,7 +14,7 @@ async function loadProfile(): Promise<Profile | null> {
   if (!s.session) return null;
   const { data } = await supabase
     .from("uni_profiles")
-    .select("id, tenant_id, full_name, email, role, department_id, tenant:uni_tenants(name, short_name), department:uni_departments(name, code)")
+    .select("id, tenant_id, full_name, email, role, department_id, must_change_password, is_active, tenant:uni_tenants(name, short_name), department:uni_departments(name, code)")
     .eq("id", s.session.user.id)
     .single();
   return (data as unknown as Profile) ?? null;
@@ -36,15 +36,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => { await supabase.auth.signOut(); setProfile(null); };
-  return <AuthCtx.Provider value={{ profile, loading, signOut }}>{children}</AuthCtx.Provider>;
+  const refresh = async () => { setProfile(await loadProfile()); };
+  return <AuthCtx.Provider value={{ profile, loading, signOut, refresh }}>{children}</AuthCtx.Provider>;
 }
+
+const registryNav = [
+  { href: "/registry", label: "Results" },
+  { href: "/registry/students", label: "Students" },
+  { href: "/registry/staff", label: "Staff" },
+  { href: "/registry/calendar", label: "Calendar" },
+  { href: "/registry/courses", label: "Courses" },
+  { href: "/registry/structure", label: "Structure" },
+  { href: "/registry/rules", label: "Rules" },
+  { href: "/registry/audit", label: "Audit" },
+];
 
 const navFor: Record<Role, { href: string; label: string }[]> = {
   student: [{ href: "/student", label: "Overview" }, { href: "/student/registration", label: "Course registration" }, { href: "/student/results", label: "Results" }],
   lecturer: [{ href: "/lecturer", label: "My courses" }],
   hod: [{ href: "/hod", label: "Approvals" }, { href: "/lecturer", label: "My courses" }],
-  registrar: [{ href: "/registry", label: "Results pipeline" }, { href: "/registry/students", label: "Students" }, { href: "/registry/setup", label: "Academic setup" }, { href: "/registry/audit", label: "Audit trail" }],
-  admin: [{ href: "/registry", label: "Results pipeline" }, { href: "/registry/students", label: "Students" }, { href: "/registry/setup", label: "Academic setup" }, { href: "/registry/audit", label: "Audit trail" }],
+  registrar: registryNav,
+  admin: registryNav,
   bursar: [{ href: "/bursary", label: "Fees and payments" }],
 };
 
@@ -60,10 +72,11 @@ export function Shell({ allow, children }: { allow: Role[]; children: ReactNode 
   useEffect(() => {
     if (loading) return;
     if (!profile) router.replace("/login");
+    else if (profile.must_change_password) router.replace("/account/password");
     else if (!allow.includes(profile.role)) router.replace(roleHome[profile.role]);
   }, [loading, profile, allow, router]);
 
-  if (loading || !profile || !allow.includes(profile.role)) {
+  if (loading || !profile || profile.must_change_password || !allow.includes(profile.role)) {
     return <div className="min-h-screen grid place-items-center text-sm text-ink-3">Loading…</div>;
   }
 
@@ -94,6 +107,7 @@ export function Shell({ allow, children }: { allow: Role[]; children: ReactNode 
               <span className="block text-ink">{profile.full_name}</span>
               <span className="block text-xs text-ink-3">{roleName[profile.role]}{profile.department ? ` · ${profile.department.code}` : ""}</span>
             </span>
+            <Link href="/account/password" className="text-ink-3 hover:text-ink text-xs">Password</Link>
             <button onClick={async () => { await signOut(); router.replace("/login"); }}
               className="rounded-md border border-line px-3 py-1.5 text-ink-2 hover:bg-mute">Sign out</button>
           </div>

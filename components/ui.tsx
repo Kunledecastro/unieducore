@@ -104,3 +104,66 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
 }
 
 export const td = "px-5 py-2.5 align-middle";
+
+export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+  return (
+    <label className="block text-sm">
+      <span className="mb-1 block text-xs font-medium text-ink-2">{label}</span>
+      {children}
+      {hint && <span className="mt-1 block text-xs text-ink-3">{hint}</span>}
+    </label>
+  );
+}
+
+export function Modal({ title, onClose, children, wide }: { title: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/30 p-4 sm:p-10" onMouseDown={onClose}>
+      <div className={`w-full ${wide ? "max-w-3xl" : "max-w-lg"} rounded-xl border border-line bg-paper shadow-xl`} onMouseDown={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-line px-5 py-3">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="Close">×</button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function Tabs<T extends string>({ value, onChange, items }: { value: T; onChange: (v: T) => void; items: { value: T; label: string }[] }) {
+  return (
+    <div className="mb-5 flex flex-wrap gap-1 border-b border-line">
+      {items.map((i) => (
+        <button key={i.value} onClick={() => onChange(i.value)}
+          className={`-mb-px border-b-2 px-3 py-2 text-sm ${value === i.value ? "border-brand font-medium text-brand" : "border-transparent text-ink-2 hover:text-ink"}`}>
+          {i.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Shows a temporary password once, with a copy button. */
+export function Credentials({ items }: { items: { name: string; email: string; password: string; extra?: string }[] }) {
+  const text = items.map((i) => `${i.name}\t${i.email}\t${i.password}${i.extra ? `\t${i.extra}` : ""}`).join("\n");
+  return (
+    <div className="rounded-lg border border-warn/30 bg-warn-soft p-4 text-sm">
+      <p className="font-medium text-warn">Copy these sign-in details now. The temporary passwords will not be shown again.</p>
+      <p className="mt-1 text-xs text-ink-2">Each person must set their own password the first time they sign in.</p>
+      <div className="mt-3 max-h-64 overflow-auto rounded bg-paper">
+        <table className="w-full text-xs">
+          <tbody className="divide-y divide-line">
+            {items.map((i) => (
+              <tr key={i.email}>
+                <td className="px-3 py-1.5">{i.name}{i.extra && <span className="block text-ink-3">{i.extra}</span>}</td>
+                <td className="px-3 py-1.5">{i.email}</td>
+                <td className="px-3 py-1.5 font-mono">{i.password}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button className="mt-3 rounded-md border border-line bg-paper px-3 py-1.5 text-xs font-medium hover:bg-mute"
+        onClick={() => navigator.clipboard?.writeText(text)}>Copy all</button>
+    </div>
+  );
+}

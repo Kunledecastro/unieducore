@@ -43,6 +43,24 @@ All writes go through Postgres functions, so the browser can't bypass a rule:
 | `uni_save_scores` | only the course lecturer, only while Draft, CA/Exam within limits |
 | `uni_advance_result` | Draft → Submitted (lecturer, all scores complete) → HOD approved (HOD of course's dept) → Senate approved → Released (Registry); HOD/Registry can return to Draft |
 | `uni_pay_fees_demo` | simulated payment; replace with Paystack/Remita webhook in Phase 2 |
+| `uni_set_current_semester` | Registry only; one current semester/session; closes registration on the old one |
+| `uni_generate_offerings` | Registry only; offers every catalogue course for that semester, skips ones already offered |
+| `uni_assign_lecturer` | Registry, or HOD for their own department; only active lecturers/HODs |
+| Edge function `uni-admin-users` | create staff/students (incl. CSV import, auto matric numbers), reset passwords, deactivate; Registry/admin only; runs server-side with the service role |
+
+Database guards (triggers): a course or offering with student registrations cannot be deleted (protects results); browser edits cannot change a profile's email, university or active flag, promote anyone to admin unless the caller is an admin, or change the caller's own role.
+
+## Admin screens (Registry)
+| Page | What it does |
+|---|---|
+| Students | add one student, import a CSV (template on the page), edit level/programme/status, reset password, deactivate |
+| Staff | add lecturers, HODs, Registry and Bursary users; change role/department; reset password; deactivate |
+| Calendar | add sessions (two semesters each), make a semester current, open/close registration, offer courses, assign lecturers |
+| Courses | course catalogue, and each programme's curriculum by level and semester (compulsory/elective) |
+| Structure | faculties, departments (codes feed matric numbers), programmes |
+| Rules | unit limits, CA/exam split, probation CGPA, fee gating, grading scale, degree classes |
+
+New accounts get a temporary password shown once to the Registry; users must set their own password at first sign-in.
 
 Row Level Security: everything is scoped by tenant (university); students see only their own records and only *released* scores. Score, result, registration and payment changes are written to `uni_audit_log` by triggers.
 
@@ -51,8 +69,7 @@ Row Level Security: everything is scoped by tenant (university); students see on
 
 ## Known gaps before production (Phase 1 hardening)
 - Real payment gateway + reconciliation
-- Admin screens to create/edit structure, courses, users (currently seeded via SQL)
-- Bulk CSV import of students and historic results
+- Bulk import of historic results
 - Transcripts, probation flagging, PDF course forms and result broadsheets
 - Move from the shared `educore-greenfield` project to a dedicated Supabase project (Pro plan)
 - Enable leaked-password protection and MFA for staff

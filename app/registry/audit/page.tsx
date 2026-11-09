@@ -9,9 +9,10 @@ type Log = { id: number; table_name: string; action: string; old_data: Record<st
 
 const label: Record<string, string> = {
   uni_scores: "Score", uni_course_offerings: "Course offering", uni_registrations: "Registration", uni_payments: "Payment",
-  accounts: "User account", uni_profiles: "Profile", uni_students: "Student record", uni_grade_bands: "Grading scale", uni_courses: "Course",
+  accounts: "User account", imports: "Results import", uni_profiles: "Profile", uni_students: "Student record", uni_grade_bands: "Grading scale", uni_courses: "Course",
 };
 const accountAction: Record<string, string> = {
+  IMPORT_RESULTS: "Imported",
   CREATE_ACCOUNT: "Account created", RESET_PASSWORD: "Password reset", DEACTIVATE_ACCOUNT: "Account deactivated", REACTIVATE_ACCOUNT: "Account reactivated",
 };
 
@@ -21,6 +22,8 @@ function changed(o: Record<string, unknown>, n: Record<string, unknown>, keys: s
 
 function describe(l: Log) {
   const o = l.old_data ?? {}, n = l.new_data ?? {};
+  if (l.table_name === "imports") return `${n.imported} past result(s) imported, ${n.failed} skipped${Array.isArray(n.new_sessions) && n.new_sessions.length ? ` · new sessions ${(n.new_sessions as string[]).join(", ")}` : ""}`;
+  if (l.table_name === "uni_payments" && l.action.startsWith("PAYSTACK_")) return `Paystack ${l.action.slice(9).toLowerCase().replace("_", " ")} · ${n.reference}`;
   if (l.table_name === "accounts") return `${accountAction[l.action] ?? l.action} · ${n.email ?? ""}${n.role ? ` (${n.role})` : ""}${n.matric_no ? ` · ${n.matric_no}` : ""}`;
   if (l.table_name === "uni_profiles") return l.action === "INSERT" ? `${n.full_name} (${n.role})` : l.action === "DELETE" ? `${o.full_name} removed` : `${n.full_name}: ${changed(o, n, ["full_name", "role", "department_id", "is_active", "must_change_password"]) || "no visible change"}`;
   if (l.table_name === "uni_students") return l.action === "INSERT" ? `${n.matric_no} enrolled at ${n.level}L` : `${n.matric_no ?? o.matric_no}: ${changed(o, n, ["level", "status", "programme_id"]) || "no visible change"}`;

@@ -129,8 +129,9 @@ function Students() {
       <PageHead title="Students" sub={`${list?.length ?? 0} students on record`}
         right={<div className="flex flex-wrap gap-2">
           <input className="input w-60" placeholder="Search name, email or matric no." value={q} onChange={(e) => setQ(e.target.value)} />
+          <a href="/registry/import" className="rounded-md border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-2 hover:bg-mute">Import past results</a>
           <label className="cursor-pointer rounded-md border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-2 hover:bg-mute">
-            Import CSV
+            Import students
             <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
           </label>
           <Button onClick={() => setAdd({ full_name: "", email: "", programme_id: progs[0]?.id ?? "", level: 100, matric_no: "" })} disabled={!progs.length}>Add student</Button>

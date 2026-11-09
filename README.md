@@ -78,6 +78,14 @@ Registry → Students → Import past results (`/registry/import`). CSV columns 
 - A course failed earlier and passed later is marked as a carry-over (rows are processed in date order).
 - Database function: `uni_import_results(rows, dry_run)`; Registry/admin only; one savepoint per row.
 
+## Academic standing and graduation
+Registry → Standing (HODs see their own department). Computed from **released** results only by `uni_academic_standing()`, the single source used by every screen.
+- **Good standing / On probation / Withdrawal recommended**: probation when CGPA is below `probation_cgpa`; withdrawal recommended after `withdraw_after_probation` consecutive semesters on probation (both under Rules).
+- **Failed, not yet passed**: courses whose best attempt is still an F (also shown to the student, with the carry-over note).
+- **Graduation eligibility** (final-year students): final level reached, every compulsory course in the programme curriculum passed, nothing outstanding, CGPA at or above the lowest class of degree, and the programme's minimum units if set under Structure. Ineligible students show each reason.
+- **Confirm graduation** (Registry): `uni_confirm_graduation(ids)` re-checks every student and refuses the whole batch if any is ineligible; sets status Graduated and fixes the final CGPA and class of degree, which later rule changes do not alter. Transcripts show the confirmed class and date.
+- CGPA counts every attempt (a failed attempt and its retake both count), the common Nigerian convention.
+
 ## Printable documents
 Print-ready A4 pages under `/print/…` ("Print / Save PDF" uses the browser's print dialog, so no PDF service is needed).
 

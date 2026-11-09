@@ -9,7 +9,7 @@ import { resultCols, semKey, summarise, type ResultRow } from "@/lib/docs";
 import { degreeClass, type DegreeClass } from "@/lib/student";
 
 type Student = {
-  id: string; matric_no: string; level: number; status: string;
+  id: string; matric_no: string; level: number; status: string; graduated_at: string | null; degree_class: string | null; final_cgpa: number | null;
   profile: { full_name: string; email: string } | null;
   programme: { name: string; award: string; duration_years: number; department: { name: string; faculty: { name: string } | null } | null } | null;
   entry: { name: string } | null;
@@ -31,7 +31,7 @@ function Transcript() {
     if (!profile || !sid) return;
     if (isStudent && sid !== profile.id) { setErr("You can only print your own transcript."); return; }
     Promise.all([
-      supabase.from("uni_students").select("id, matric_no, level, status, profile:uni_profiles(full_name, email), programme:uni_programmes(name, award, duration_years, department:uni_departments(name, faculty:uni_faculties(name))), entry:uni_sessions!uni_students_entry_session_id_fkey(name)").eq("id", sid).maybeSingle(),
+      supabase.from("uni_students").select("id, matric_no, level, status, graduated_at, degree_class, final_cgpa, profile:uni_profiles(full_name, email), programme:uni_programmes(name, award, duration_years, department:uni_departments(name, faculty:uni_faculties(name))), entry:uni_sessions!uni_students_entry_session_id_fkey(name)").eq("id", sid).maybeSingle(),
       supabase.from("uni_v_results").select(resultCols).eq("student_id", sid).eq("result_status", "released"),
       supabase.from("uni_degree_classes").select("name, min_cgpa"),
       supabase.from("uni_grade_bands").select("grade, min_score, points").order("min_score", { ascending: false }),
@@ -105,9 +105,10 @@ function Transcript() {
               <th>Total credit units</th><td className="num">{final.cumTcu}</td>
               <th>Total grade points</th><td className="num">{final.cumTgp}</td>
               <th>Cumulative GPA</th><td className="num font-bold">{final.cgpa?.toFixed(2)}</td>
-              <th>{st.status === "graduated" ? "Class of degree" : "Current standing"}</th><td className="font-bold">{degreeClass(final.cgpa, classes)}</td>
+              <th>{st.status === "graduated" ? "Class of degree" : "Current class"}</th><td className="font-bold">{st.status === "graduated" && st.degree_class ? st.degree_class : degreeClass(final.cgpa, classes)}</td>
             </tr>
             {final.outstanding.length > 0 && <tr><th>Outstanding courses</th><td colSpan={7}>{final.outstanding.join(", ")}</td></tr>}
+            {st.status === "graduated" && st.graduated_at && <tr><th>Graduated</th><td colSpan={7}>Graduation confirmed by Senate on {new Date(st.graduated_at).toLocaleDateString("en-NG", { dateStyle: "long" })} with a final CGPA of {Number(st.final_cgpa ?? final.cgpa).toFixed(2)}</td></tr>}
           </tbody>
         </table>
       )}

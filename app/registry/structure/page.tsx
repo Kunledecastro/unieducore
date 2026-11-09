@@ -5,14 +5,14 @@ import { Shell, useAuth } from "@/components/auth";
 import { Card, PageHead, Button, Notice, Modal, Field, Pill, Empty } from "@/components/ui";
 import { supabase, errMsg } from "@/lib/supabase";
 
-type Prog = { id: string; name: string; award: string; duration_years: number; students: { id: string }[] };
+type Prog = { id: string; name: string; award: string; duration_years: number; min_graduation_units: number | null; students: { id: string }[] };
 type Dept = { id: string; name: string; code: string; faculty_id: string; programmes: Prog[]; courses: { id: string }[] };
 type Fac = { id: string; name: string; code: string; departments: Dept[] };
 
 type Form =
   | { kind: "faculty"; id?: string; name: string; code: string }
   | { kind: "department"; id?: string; faculty_id: string; name: string; code: string }
-  | { kind: "programme"; id?: string; department_id: string; name: string; award: string; duration_years: number };
+  | { kind: "programme"; id?: string; department_id: string; name: string; award: string; duration_years: number; min_graduation_units: string };
 
 const AWARDS = ["B.Sc.", "B.A.", "B.Eng.", "B.Tech.", "LL.B.", "MBBS", "B.Ed.", "M.Sc.", "MBA", "Ph.D."];
 
@@ -25,7 +25,7 @@ function Structure() {
 
   const load = useCallback(async () => {
     const { data } = await supabase.from("uni_faculties")
-      .select("id, name, code, departments:uni_departments(id, name, code, faculty_id, programmes:uni_programmes(id, name, award, duration_years, students:uni_students(id)), courses:uni_courses(id))")
+      .select("id, name, code, departments:uni_departments(id, name, code, faculty_id, programmes:uni_programmes(id, name, award, duration_years, min_graduation_units, students:uni_students(id)), courses:uni_courses(id))")
       .order("name");
     const list = ((data as unknown as Fac[]) ?? []).map((f) => ({
       ...f, departments: [...f.departments].sort((a, b) => a.name.localeCompare(b.name))
@@ -49,7 +49,7 @@ function Structure() {
       ({ error } = form.id ? await supabase.from("uni_departments").update(row).eq("id", form.id)
         : await supabase.from("uni_departments").insert({ ...row, tenant_id: t }));
     } else {
-      const row = { name: form.name.trim(), award: form.award, duration_years: form.duration_years, department_id: form.department_id };
+      const row = { name: form.name.trim(), award: form.award, duration_years: form.duration_years, department_id: form.department_id, min_graduation_units: form.min_graduation_units.trim() ? Number(form.min_graduation_units) : null };
       ({ error } = form.id ? await supabase.from("uni_programmes").update(row).eq("id", form.id)
         : await supabase.from("uni_programmes").insert({ ...row, tenant_id: t }));
     }
@@ -91,7 +91,7 @@ function Structure() {
                           <span className="font-medium">{d.name}</span> <span className="text-ink-3">({d.code}) · {d.courses.length} courses</span>
                         </div>
                         <div className="flex gap-2">
-                          <Button small variant="secondary" onClick={() => setForm({ kind: "programme", department_id: d.id, name: "", award: "B.Sc.", duration_years: 4 })}>Add programme</Button>
+                          <Button small variant="secondary" onClick={() => setForm({ kind: "programme", department_id: d.id, name: "", award: "B.Sc.", duration_years: 4, min_graduation_units: "" })}>Add programme</Button>
                           <Button small variant="secondary" onClick={() => setForm({ kind: "department", id: d.id, faculty_id: d.faculty_id, name: d.name, code: d.code })}>Edit</Button>
                           {d.programmes.length === 0 && d.courses.length === 0 && <Button small variant="danger" onClick={() => remove("uni_departments", d.id, d.name)}>Delete</Button>}
                         </div>
@@ -101,8 +101,8 @@ function Structure() {
                           {d.programmes.map((p) => (
                             <li key={p.id} className="flex items-center gap-2 rounded-lg border border-line px-3 py-1.5 text-sm">
                               <Pill tone="brand">{p.award}</Pill> {p.name}
-                              <span className="text-xs text-ink-3">{p.duration_years} yrs · {p.students.length} students</span>
-                              <button className="text-xs text-brand hover:underline" onClick={() => setForm({ kind: "programme", id: p.id, department_id: d.id, name: p.name, award: p.award, duration_years: p.duration_years })}>Edit</button>
+                              <span className="text-xs text-ink-3">{p.duration_years} yrs{p.min_graduation_units ? ` · ${p.min_graduation_units} units to graduate` : ""} · {p.students.length} students</span>
+                              <button className="text-xs text-brand hover:underline" onClick={() => setForm({ kind: "programme", id: p.id, department_id: d.id, name: p.name, award: p.award, duration_years: p.duration_years, min_graduation_units: p.min_graduation_units?.toString() ?? "" })}>Edit</button>
                               {p.students.length === 0 && <button className="text-xs text-bad hover:underline" onClick={() => remove("uni_programmes", p.id, p.name)}>Delete</button>}
                             </li>
                           ))}
@@ -147,6 +147,12 @@ function Structure() {
                   <input className="input w-full" type="number" min={1} max={7} value={form.duration_years}
                     onChange={(e) => setForm({ ...form, duration_years: Number(e.target.value) })} />
                 </Field>
+                <div className="col-span-2">
+                  <Field label="Minimum units to graduate (optional)" hint="Leave blank to require only that every compulsory course is passed.">
+                    <input className="input w-40" type="number" min={1} max={600} value={form.min_graduation_units}
+                      onChange={(e) => setForm({ ...form, min_graduation_units: e.target.value })} placeholder="e.g. 150" />
+                  </Field>
+                </div>
               </div>
             )}
             <div className="flex gap-2 pt-2">

@@ -5,7 +5,7 @@ import { Shell, useAuth } from "@/components/auth";
 import { Card, PageHead, Button, Notice, Field } from "@/components/ui";
 import { supabase, errMsg } from "@/lib/supabase";
 
-type Settings = { min_units: number; max_units: number; ca_max: number; exam_max: number; probation_cgpa: number; require_fees_for_registration: boolean; allow_demo_payments: boolean };
+type Settings = { min_units: number; max_units: number; ca_max: number; exam_max: number; probation_cgpa: number; withdraw_after_probation: number; require_fees_for_registration: boolean; allow_demo_payments: boolean };
 type Band = { id?: string; grade: string; min_score: number; points: number };
 type Cls = { id?: string; name: string; min_cgpa: number };
 
@@ -20,7 +20,7 @@ function Rules() {
 
   const load = useCallback(async () => {
     const [st, b, c] = await Promise.all([
-      supabase.from("uni_settings").select("min_units, max_units, ca_max, exam_max, probation_cgpa, require_fees_for_registration, allow_demo_payments").single(),
+      supabase.from("uni_settings").select("min_units, max_units, ca_max, exam_max, probation_cgpa, withdraw_after_probation, require_fees_for_registration, allow_demo_payments").single(),
       supabase.from("uni_grade_bands").select("id, grade, min_score, points").order("min_score", { ascending: false }),
       supabase.from("uni_degree_classes").select("id, name, min_cgpa").order("min_cgpa", { ascending: false }),
     ]);
@@ -88,6 +88,7 @@ function Rules() {
           <Field label="Minimum credit units per semester"><input className="input w-full" type="number" min={0} value={s.min_units} onChange={(e) => setS({ ...s, min_units: num(e.target.value) })} /></Field>
           <Field label="Maximum credit units per semester"><input className="input w-full" type="number" min={1} value={s.max_units} onChange={(e) => setS({ ...s, max_units: num(e.target.value) })} /></Field>
           <Field label="Probation below CGPA"><input className="input w-full" type="number" step="0.01" min={0} max={5} value={s.probation_cgpa} onChange={(e) => setS({ ...s, probation_cgpa: num(e.target.value) })} /></Field>
+          <Field label="Recommend withdrawal after" hint="consecutive semesters on probation"><input className="input w-full" type="number" min={1} max={6} value={s.withdraw_after_probation} onChange={(e) => setS({ ...s, withdraw_after_probation: num(e.target.value) })} /></Field>
           <Field label="Continuous assessment (CA) out of"><input className="input w-full" type="number" min={0} max={100} value={s.ca_max} onChange={(e) => setS({ ...s, ca_max: num(e.target.value) })} /></Field>
           <Field label="Examination out of"><input className="input w-full" type="number" min={0} max={100} value={s.exam_max} onChange={(e) => setS({ ...s, exam_max: num(e.target.value) })} /></Field>
           <label className="flex items-center gap-2 self-end pb-2 text-sm">

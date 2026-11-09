@@ -9,10 +9,10 @@ type Log = { id: number; table_name: string; action: string; old_data: Record<st
 
 const label: Record<string, string> = {
   uni_scores: "Score", uni_course_offerings: "Course offering", uni_registrations: "Registration", uni_payments: "Payment",
-  accounts: "User account", imports: "Results import", uni_profiles: "Profile", uni_students: "Student record", uni_grade_bands: "Grading scale", uni_courses: "Course",
+  accounts: "User account", imports: "Results import", graduation: "Graduation", uni_profiles: "Profile", uni_students: "Student record", uni_grade_bands: "Grading scale", uni_courses: "Course",
 };
 const accountAction: Record<string, string> = {
-  IMPORT_RESULTS: "Imported",
+  IMPORT_RESULTS: "Imported", CONFIRM_GRADUATION: "Graduated",
   CREATE_ACCOUNT: "Account created", RESET_PASSWORD: "Password reset", DEACTIVATE_ACCOUNT: "Account deactivated", REACTIVATE_ACCOUNT: "Account reactivated",
 };
 
@@ -22,6 +22,7 @@ function changed(o: Record<string, unknown>, n: Record<string, unknown>, keys: s
 
 function describe(l: Log) {
   const o = l.old_data ?? {}, n = l.new_data ?? {};
+  if (l.table_name === "graduation") return `${n.count} student(s) graduated`;
   if (l.table_name === "imports") return `${n.imported} past result(s) imported, ${n.failed} skipped${Array.isArray(n.new_sessions) && n.new_sessions.length ? ` · new sessions ${(n.new_sessions as string[]).join(", ")}` : ""}`;
   if (l.table_name === "uni_payments" && l.action.startsWith("PAYSTACK_")) return `Paystack ${l.action.slice(9).toLowerCase().replace("_", " ")} · ${n.reference}`;
   if (l.table_name === "accounts") return `${accountAction[l.action] ?? l.action} · ${n.email ?? ""}${n.role ? ` (${n.role})` : ""}${n.matric_no ? ` · ${n.matric_no}` : ""}`;

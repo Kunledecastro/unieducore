@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 const registryNav = [
   { href: "/registry", label: "Results" },
   { href: "/registry/students", label: "Students" },
+  { href: "/registry/standing", label: "Standing" },
   { href: "/registry/staff", label: "Staff" },
   { href: "/registry/calendar", label: "Calendar" },
   { href: "/registry/courses", label: "Courses" },
@@ -54,7 +55,7 @@ const registryNav = [
 const navFor: Record<Role, { href: string; label: string }[]> = {
   student: [{ href: "/student", label: "Overview" }, { href: "/student/registration", label: "Course registration" }, { href: "/student/results", label: "Results" }],
   lecturer: [{ href: "/lecturer", label: "My courses" }],
-  hod: [{ href: "/hod", label: "Approvals" }, { href: "/lecturer", label: "My courses" }],
+  hod: [{ href: "/hod", label: "Approvals" }, { href: "/registry/standing", label: "Standing" }, { href: "/lecturer", label: "My courses" }],
   registrar: registryNav,
   admin: registryNav,
   bursar: [{ href: "/bursary", label: "Fees and payments" }],

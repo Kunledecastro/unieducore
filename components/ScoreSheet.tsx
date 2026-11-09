@@ -84,6 +84,7 @@ export function ScoreSheet({ offeringId, mode, onChanged }: { offeringId: string
         <span><b className="text-ink">{offering.course?.code}</b> · {offering.course?.title} · {offering.course?.units} units</span>
         <span>Lecturer: {offering.lecturer?.full_name ?? "Unassigned"}</span>
         <StatusPill status={st} />
+        <a href={`/print/result-sheet/${offeringId}`} className="ml-auto rounded-md border border-line bg-paper px-3 py-1.5 text-xs font-medium text-ink-2 hover:bg-mute">Print result sheet</a>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4 mb-4">

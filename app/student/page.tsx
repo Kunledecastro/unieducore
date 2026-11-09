@@ -62,7 +62,10 @@ function Overview() {
             {registration?.status === "approved" && "Your course registration is approved. Your lecturers can now record your scores."}
             {registration?.status === "rejected" && "Your HOD returned your course form. Review your courses and submit again."}
           </p>
-          <div className="mt-4"><Link href="/student/registration"><Button variant="secondary">Open course registration</Button></Link></div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link href="/student/registration"><Button variant="secondary">Open course registration</Button></Link>
+            {registration && <Link href="/print/course-form/me"><Button variant="secondary">Print course form</Button></Link>}
+          </div>
         </Card>
 
         <Card title={`Fees · ${semester?.session?.name}`}>

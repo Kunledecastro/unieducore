@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Shell, useAuth } from "@/components/auth";
 import { Card, PageHead, Table, td, Empty, Pill, Stat } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
@@ -35,7 +36,8 @@ function Results() {
 
   return (
     <>
-      <PageHead title="Results" sub="Only results approved by Senate and released by the Registry appear here." />
+      <PageHead title="Results" sub="Only results approved by Senate and released by the Registry appear here."
+        right={gpas.length > 0 && <Link href="/print/transcript/me" className="rounded-md border border-line bg-paper px-4 py-2 text-sm font-medium text-ink-2 hover:bg-mute">Print statement of results</Link>} />
       {latest && (
         <div className="grid gap-4 sm:grid-cols-3 mb-6">
           <Stat label="CGPA" value={Number(latest.cgpa).toFixed(2)} note="5-point scale" />

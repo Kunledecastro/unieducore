@@ -3,11 +3,16 @@
 import { supabase } from "@/lib/supabase";
 
 /** Calls the server-side user-administration function with the signed-in user's token. */
-export async function adminCall<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
+export const adminCall = <T = Record<string, unknown>>(body: Record<string, unknown>) => callFunction<T>("uni-admin-users", body);
+
+/** Calls the server-side payments function (Paystack). */
+export const payCall = <T = Record<string, unknown>>(body: Record<string, unknown>) => callFunction<T>("uni-payments", body);
+
+export async function callFunction<T = Record<string, unknown>>(name: string, body: Record<string, unknown>): Promise<T> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) throw new Error("Please sign in again");
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/uni-admin-users`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${name}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

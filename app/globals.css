@@ -33,3 +33,19 @@ input, select { font: inherit; }
   outline: none;
 }
 .input:focus { border-color: var(--color-brand); box-shadow: 0 0 0 3px var(--color-brand-soft); }
+
+/* Printable documents */
+.doc { color: #000; font-size: 11px; position: relative; }
+.doc table.tbl { width: 100%; border-collapse: collapse; }
+.doc table.tbl th, .doc table.tbl td { border: 1px solid #555; padding: 3px 5px; text-align: left; vertical-align: top; }
+.doc table.tbl th { background: #f0f0f0; font-weight: 600; }
+.doc table.tbl td.num, .doc table.tbl th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.doc table.tbl td.c, .doc table.tbl th.c { text-align: center; }
+.doc .break-inside-avoid { break-inside: avoid; }
+@media print {
+  .no-print { display: none !important; }
+  html, body { background: #fff !important; }
+  .doc thead { display: table-header-group; }
+  .doc tr { break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

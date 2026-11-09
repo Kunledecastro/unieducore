@@ -49,7 +49,8 @@ function Approvals() {
 
   return (
     <>
-      <PageHead title="Department approvals" sub={`${profile?.department?.name} · current semester`} />
+      <PageHead title="Department approvals" sub={`${profile?.department?.name} · current semester`}
+        right={<Link href="/registry/broadsheet"><Button variant="secondary">Department broadsheet</Button></Link>} />
       {msg && <Notice kind={msg.kind} onClose={() => setMsg(null)}>{msg.text}</Notice>}
 
       <div className="grid gap-4 sm:grid-cols-3 mb-6">

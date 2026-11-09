@@ -62,6 +62,16 @@ Database guards (triggers): a course or offering with student registrations cann
 
 New accounts get a temporary password shown once to the Registry; users must set their own password at first sign-in.
 
+## Printable documents
+Print-ready A4 pages under `/print/…` ("Print / Save PDF" uses the browser's print dialog, so no PDF service is needed).
+
+| Document | Who | Where to find it | Notes |
+|---|---|---|---|
+| Course registration form | Student (own), HOD, Registry | Student overview; Registry → Students | Signature lines; watermarked until HOD approval |
+| Course result sheet | Lecturer, HOD, Registry | "Print result sheet" on any score sheet | Scores, grades, distribution, approval trail; "Provisional" until Senate approval |
+| Senate broadsheet | HOD (own department), Registry | Results → Senate broadsheet | Landscape; students × courses, semester GPA, CGPA, remarks (carry-over, probation) |
+| Transcript | Registry (official), student (unofficial copy) | Registry → Students; student Results page | Released results only; reference number; grading scale printed from Rules |
+
 Row Level Security: everything is scoped by tenant (university); students see only their own records and only *released* scores. Score, result, registration and payment changes are written to `uni_audit_log` by triggers.
 
 ## Configurable per university (no code change)

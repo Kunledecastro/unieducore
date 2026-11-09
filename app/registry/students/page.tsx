@@ -159,6 +159,8 @@ function Students() {
                   <td className={`${td} tabular-nums font-medium`}>{c === undefined ? "…" : c === null ? "—" : c.toFixed(2)}</td>
                   <td className={td}>{c ? <span className="text-sm">{degreeClass(c, classes)}</span> : <span className="text-xs text-ink-3">No results yet</span>}</td>
                   <td className={`${td} text-right whitespace-nowrap`}>
+                    <a className="mr-3 text-xs text-brand hover:underline" href={`/print/transcript/${s.id}`}>Transcript</a>
+                    <a className="mr-3 text-xs text-brand hover:underline" href={`/print/course-form/${s.id}`}>Course form</a>
                     <button className="mr-3 text-xs text-brand hover:underline" onClick={() => setEdit({ id: s.id, name: s.profile?.full_name ?? "", programme_id: s.programme_id, level: s.level, status: s.status })}>Edit</button>
                     <button className="mr-3 text-xs text-brand hover:underline" onClick={() => reset(s)}>Reset password</button>
                     <button className={`text-xs hover:underline ${s.profile?.is_active ? "text-bad" : "text-good"}`} onClick={() => toggleActive(s)}>{s.profile?.is_active ? "Deactivate" : "Reactivate"}</button>

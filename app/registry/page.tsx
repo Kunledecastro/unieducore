@@ -22,7 +22,8 @@ function Pipeline() {
 
   return (
     <>
-      <PageHead title="Results pipeline" sub={sem ? `${sem.session?.name} session · ${sem.name} · courses with registered students` : undefined} />
+      <PageHead title="Results pipeline" sub={sem ? `${sem.session?.name} session · ${sem.name} · courses with registered students` : undefined}
+        right={<Link href="/registry/broadsheet"><Button variant="secondary">Senate broadsheet</Button></Link>} />
 
       <div className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {stages.map((s, i) => (

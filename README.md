@@ -62,6 +62,22 @@ Database guards (triggers): a course or offering with student registrations cann
 
 New accounts get a temporary password shown once to the Registry; users must set their own password at first sign-in.
 
+## Fee payments
+- **Online (Paystack):** student clicks "Pay online" → Paystack checkout → returns to `/student/payment`. A payment counts only when Paystack confirms `success` for the exact NGN amount, checked on return and by the signed webhook (`uni-payments` edge function). Mismatches are flagged to the Bursary, never counted.
+- **Bank payments:** Bursary → Record bank payment (teller, transfer, POS). Each reference can be recorded once.
+- **Receipts:** `/print/receipt/[reference]` for students and the Bursary.
+- **Demo payments:** Rules → "Allow demo payments". Must be **off** for real use, otherwise students can mark fees paid.
+- **Switching on Paystack:** Supabase → Edge Functions → Secrets → `PAYSTACK_SECRET_KEY`; Paystack webhook URL `https://ghvltgumkwtpdzdgfxio.supabase.co/functions/v1/uni-payments/webhook`.
+
+## Importing past results
+Registry → Students → Import past results (`/registry/import`). CSV columns `matric_no, session, semester, course_code` plus `ca, exam` or `total`.
+1. **Check file** runs the whole import and rolls it back, listing every problem by CSV line.
+2. **Import** saves the valid rows; problem rows are skipped and can be fixed and re-imported (duplicates are never created).
+- Past sessions are created automatically; the current semester is refused (lecturers own it).
+- Imported results count as Senate-approved and released, so CGPA, transcripts and broadsheets include them immediately.
+- A course failed earlier and passed later is marked as a carry-over (rows are processed in date order).
+- Database function: `uni_import_results(rows, dry_run)`; Registry/admin only; one savepoint per row.
+
 ## Printable documents
 Print-ready A4 pages under `/print/…` ("Print / Save PDF" uses the browser's print dialog, so no PDF service is needed).
 

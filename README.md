@@ -60,7 +60,7 @@ Database guards (triggers): a course or offering with student registrations cann
 | Calendar | add sessions (two semesters each), make a semester current, open/close registration, offer courses, assign lecturers |
 | Courses | course catalogue, and each programme's curriculum by level and semester (compulsory/elective) |
 | Structure | faculties, departments (codes feed matric numbers), programmes |
-| Rules | unit limits, CA/exam split, probation CGPA, fee gating, grading scale, degree classes |
+| Rules | unit limits, CA/exam split, probation CGPA, repeated courses in CGPA, fee gating, grading scale, degree classes |
 
 New accounts get a temporary password shown once to the Registry; users must set their own password at first sign-in.
 
@@ -86,7 +86,8 @@ Registry → Standing (HODs see their own department). Computed from **released*
 - **Failed, not yet passed**: courses whose best attempt is still an F (also shown to the student, with the carry-over note).
 - **Graduation eligibility** (final-year students): final level reached, every compulsory course in the programme curriculum passed, nothing outstanding, CGPA at or above the lowest class of degree, and the programme's minimum units if set under Structure. Ineligible students show each reason.
 - **Confirm graduation** (Registry): `uni_confirm_graduation(ids)` re-checks every student and refuses the whole batch if any is ineligible; sets status Graduated and fixes the final CGPA and class of degree, which later rule changes do not alter. Transcripts show the confirmed class and date.
-- CGPA counts every attempt (a failed attempt and its retake both count), the common Nigerian convention.
+- **Repeated courses in CGPA** (Rules → `cgpa_attempt_policy`): *Every attempt counts* (default, the common Nigerian convention — a failed attempt and its retake both count) or *Best attempt only* (earlier failed attempts drop out of CGPA). Semester GPA always counts what was taken that semester. Changing it recalculates CGPA and standing everywhere — results page, standing, transcript, broadsheet; graduated students keep their confirmed class. Transcripts and broadsheets state which policy applied.
+  Example: CSC101 (3 units) failed then passed with A, plus GST101 B (2 units) → every attempt 23/8 = 2.88; best attempt 23/5 = 4.60.
 
 ## Hostel management
 Apply → pay → auto-allocate, first come first served.
@@ -111,7 +112,7 @@ Print-ready A4 pages under `/print/…` ("Print / Save PDF" uses the browser's p
 Row Level Security: everything is scoped by tenant (university); students see only their own records and only *released* scores. Score, result, registration and payment changes are written to `uni_audit_log` by triggers.
 
 ## Configurable per university (no code change)
-`uni_settings` (unit limits, CA/exam split, probation CGPA, fee gating, hostel applications), `uni_grade_bands`, `uni_degree_classes`, faculties/departments/programmes/courses.
+`uni_settings` (unit limits, CA/exam split, probation CGPA, CGPA attempt policy, fee gating, hostel applications), `uni_grade_bands`, `uni_degree_classes`, faculties/departments/programmes/courses.
 
 ## Security
 See [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) (22 Nov 2026). Key guarantees enforced in the database: result approvals only move through the workflow functions; graduation is set only by Confirm graduation; scores are visible only to the course lecturer, the relevant HOD, the Registry and (once released) the student; deactivated accounts lose access immediately; every change is audited with the person who made it. New `uni_` tables must revoke privileges from `anon` (Supabase grants them by default).

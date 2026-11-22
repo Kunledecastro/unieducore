@@ -5,13 +5,14 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/components/auth";
 import { PrintShell, Letterhead, SignatureLines, Watermark, printedOn } from "@/components/PrintShell";
 import { supabase } from "@/lib/supabase";
-import { resultCols, semKey, summarise, remark, type ResultRow } from "@/lib/docs";
+import { resultCols, semKey, summarise, remark, policyNote, type ResultRow, type AttemptPolicy } from "@/lib/docs";
 
 type Student = { id: string; matric_no: string; profile: { full_name: string } | null };
 type Meta = {
   sem: { name: string; number: number; session: { name: string } | null } | null;
   prog: { name: string; award: string; department: { name: string; faculty: { name: string } | null } | null } | null;
   probation: number;
+  policy: AttemptPolicy;
 };
 
 function Broadsheet() {
@@ -29,10 +30,10 @@ function Broadsheet() {
         supabase.from("uni_semesters").select("name, number, session:uni_sessions(name)").eq("id", semesterId).single(),
         supabase.from("uni_programmes").select("name, award, department:uni_departments(name, faculty:uni_faculties(name))").eq("id", programmeId).single(),
         supabase.from("uni_students").select("id, matric_no, profile:uni_profiles(full_name)").eq("programme_id", programmeId).eq("level", Number(level)).order("matric_no"),
-        supabase.from("uni_settings").select("probation_cgpa").single(),
+        supabase.from("uni_settings").select("probation_cgpa, cgpa_attempt_policy").single(),
       ]);
       const list = (st as unknown as Student[]) ?? [];
-      setMeta({ sem: sem as unknown as Meta["sem"], prog: prog as unknown as Meta["prog"], probation: Number(set?.probation_cgpa ?? 1) });
+      setMeta({ sem: sem as unknown as Meta["sem"], prog: prog as unknown as Meta["prog"], probation: Number(set?.probation_cgpa ?? 1), policy: set?.cgpa_attempt_policy === "best" ? "best" : "all" });
       setStudents(list);
       if (list.length) {
         const all: ResultRow[] = [];
@@ -59,7 +60,7 @@ function Broadsheet() {
     const table = students.filter((s) => cur.some((r) => r.student_id === s.id)).map((s) => {
       const mine = rows.filter((r) => r.student_id === s.id);
       const cells = new Map(mine.filter((r) => r.semester_id === semesterId).map((r) => [r.course_id, r]));
-      return { s, cells, sum: summarise(mine, key) };
+      return { s, cells, sum: summarise(mine, key, meta?.policy) };
     });
     return { courses, table, allFinal, pending: cur.filter((r) => r.grade === null).length };
   }, [rows, students, semesterId, meta]);
@@ -115,6 +116,7 @@ function Broadsheet() {
             <span>Cells show total score and grade. * carry-over course. — score not yet recorded.</span>
             <span>TCU total credit units · TGP total grade points (units × points) · GPA = TGP ÷ TCU</span>
             <span>Probation below CGPA {meta.probation.toFixed(2)}</span>
+            <span>{policyNote(meta.policy)}</span>
           </div>
           <table className="tbl mt-3 w-auto text-[10px] break-inside-avoid">
             <tbody>

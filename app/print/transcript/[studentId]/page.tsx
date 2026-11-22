@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { useAuth } from "@/components/auth";
 import { PrintShell, Letterhead, SignatureLines, Watermark, printedOn } from "@/components/PrintShell";
 import { supabase } from "@/lib/supabase";
-import { resultCols, semKey, summarise, type ResultRow } from "@/lib/docs";
+import { resultCols, semKey, summarise, policyNote, type ResultRow, type AttemptPolicy } from "@/lib/docs";
 import { degreeClass, type DegreeClass } from "@/lib/student";
 
 type Student = {
@@ -23,6 +23,7 @@ function Transcript() {
   const [classes, setClasses] = useState<DegreeClass[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [scale, setScale] = useState("");
+  const [policy, setPolicy] = useState<AttemptPolicy>("all");
 
   const isStudent = profile?.role === "student";
   const sid = params.studentId === "me" ? profile?.id : params.studentId;
@@ -35,7 +36,9 @@ function Transcript() {
       supabase.from("uni_v_results").select(resultCols).eq("student_id", sid).eq("result_status", "released"),
       supabase.from("uni_degree_classes").select("name, min_cgpa"),
       supabase.from("uni_grade_bands").select("grade, min_score, points").order("min_score", { ascending: false }),
-    ]).then(([s, r, c, b]) => {
+      supabase.from("uni_settings").select("cgpa_attempt_policy").maybeSingle(),
+    ]).then(([s, r, c, b, p]) => {
+      setPolicy(p.data?.cgpa_attempt_policy === "best" ? "best" : "all");
       setScale(((b.data as { grade: string; min_score: number; points: number }[]) ?? []).map((x) => `${x.grade} (${Number(x.min_score)}+) = ${Number(x.points)}`).join(", "));
       if (!s.data) { setErr("Student not found."); return; }
       setSt(s.data as unknown as Student);
@@ -48,9 +51,9 @@ function Transcript() {
     const keys = [...new Set(rows.map(semKey))].sort();
     return keys.map((k) => {
       const list = rows.filter((r) => semKey(r) === k).sort((a, b) => a.code.localeCompare(b.code));
-      return { key: k, session: list[0].session_name, name: list[0].semester_name, list, sum: summarise(rows, k) };
+      return { key: k, session: list[0].session_name, name: list[0].semester_name, list, sum: summarise(rows, k, policy) };
     });
-  }, [rows]);
+  }, [rows, policy]);
 
   if (err) return <p className="text-sm text-bad">{err}</p>;
   if (!st) return <p className="text-sm text-ink-3">Loading…</p>;
@@ -114,7 +117,7 @@ function Transcript() {
       )}
 
       <p className="mt-3 text-[10px] text-ink-2">
-        Grading scale: {scale}. * carry-over course.
+        Grading scale: {scale}. * carry-over course. {policyNote(policy)}
         {!isStudent && " This transcript is valid only with the Registrar's signature and the university seal."}
       </p>
       {isStudent ? (

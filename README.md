@@ -101,9 +101,12 @@ Row Level Security: everything is scoped by tenant (university); students see on
 ## Configurable per university (no code change)
 `uni_settings` (unit limits, CA/exam split, probation CGPA, fee gating), `uni_grade_bands`, `uni_degree_classes`, faculties/departments/programmes/courses.
 
-## Known gaps before production (Phase 1 hardening)
-- Real payment gateway + reconciliation
-- Bulk import of historic results
-- Transcripts, probation flagging, PDF course forms and result broadsheets
+## Security
+See [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) (22 Nov 2026). Key guarantees enforced in the database: result approvals only move through the workflow functions; graduation is set only by Confirm graduation; scores are visible only to the course lecturer, the relevant HOD, the Registry and (once released) the student; deactivated accounts lose access immediately; every change is audited with the person who made it. New `uni_` tables must revoke privileges from `anon` (Supabase grants them by default).
+
+## Before the pilot (needs the project owner)
+- Supabase Auth: turn on leaked-password protection, turn off public sign-ups, consider a shorter JWT expiry
+- Rules: switch off "Allow demo payments"
 - Move from the shared `educore-greenfield` project to a dedicated Supabase project (Pro plan)
-- Enable leaked-password protection and MFA for staff
+- MFA for Registry and Bursary accounts
+- Add the Paystack secret key when ready

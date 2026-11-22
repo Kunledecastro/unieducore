@@ -8,7 +8,7 @@ import { Card, PageHead, Button } from "@/components/ui";
 import { naira, errMsg } from "@/lib/supabase";
 import { payCall } from "@/lib/admin";
 
-type Result = { status: string; amount: number; reference: string };
+type Result = { status: string; amount: number; reference: string; purpose?: "school_fees" | "hostel" };
 
 function PaymentReturn() {
   const params = useSearchParams();
@@ -30,14 +30,14 @@ function PaymentReturn() {
   const pending = res?.status === "pending";
   return (
     <>
-      <PageHead title="Fee payment" sub={reference && <span className="font-mono">Ref: {reference}</span>} />
+      <PageHead title="Payment" sub={reference && <span className="font-mono">Ref: {reference}</span>} />
       <Card>
         {checking ? <p className="text-sm text-ink-2">Confirming your payment with Paystack…</p>
           : err ? <p className="text-sm text-bad">{err}</p>
           : ok ? (
             <div>
               <div className="text-lg font-semibold text-good">Payment confirmed</div>
-              <p className="mt-1 text-sm text-ink-2">{naira(res!.amount)} has been received and your fees are updated. You can now register your courses.</p>
+              <p className="mt-1 text-sm text-ink-2">{res?.purpose === "hostel" ? `${naira(res!.amount)} has been received and your hostel bed is confirmed. Take your allocation slip to the hall porter to check in.` : `${naira(res!.amount)} has been received and your fees are updated. You can now register your courses.`}</p>
             </div>
           ) : pending ? (
             <div>
@@ -55,7 +55,7 @@ function PaymentReturn() {
         <div className="mt-5 flex flex-wrap gap-2">
           {ok && <Link href={`/print/receipt/${encodeURIComponent(reference)}`}><Button>View receipt</Button></Link>}
           {pending && <Button onClick={check} disabled={checking}>Check again</Button>}
-          <Link href="/student"><Button variant="secondary">Back to overview</Button></Link>
+          <Link href={res?.purpose === "hostel" ? "/student/hostel" : "/student"}><Button variant="secondary">{res?.purpose === "hostel" ? "Back to hostel" : "Back to overview"}</Button></Link>
         </div>
       </Card>
     </>

@@ -6,7 +6,7 @@ export const supabase = createClient(
   { auth: { persistSession: true, autoRefreshToken: true } }
 );
 
-export type Role = "admin" | "registrar" | "hod" | "lecturer" | "student" | "bursar";
+export type Role = "admin" | "registrar" | "hod" | "lecturer" | "student" | "bursar" | "hostel_officer" | "porter";
 export type ResultStatus = "draft" | "submitted" | "hod_approved" | "senate_approved" | "released";
 
 export type Profile = {
@@ -16,10 +16,12 @@ export type Profile = {
   email: string;
   role: Role;
   department_id: string | null;
+  hostel_id?: string | null;
   must_change_password?: boolean;
   is_active?: boolean;
   tenant?: { name: string; short_name: string } | null;
   department?: { name: string; code: string } | null;
+  hostel?: { name: string } | null;
 };
 
 export type GradeBand = { grade: string; min_score: number; points: number };
@@ -48,6 +50,8 @@ export const roleHome: Record<Role, string> = {
   registrar: "/registry",
   admin: "/registry",
   bursar: "/bursary",
+  hostel_officer: "/hostel",
+  porter: "/porter",
 };
 
 export function errMsg(e: unknown) {

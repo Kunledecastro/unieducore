@@ -34,7 +34,7 @@ function CourseForm() {
           .select("status, submitted_at, decided_at, decider:uni_profiles!uni_registrations_decided_by_fkey(full_name), courses:uni_registration_courses(id, is_carryover, offering:uni_course_offerings(course:uni_courses(code, title, units)))")
           .eq("student_id", sid).eq("semester_id", s.id).maybeSingle(),
         supabase.rpc("uni_fees_due", { p_student: sid, p_session: s.session?.id }),
-        supabase.from("uni_payments").select("amount").eq("student_id", sid).eq("session_id", s.session?.id ?? "").eq("status", "successful"),
+        supabase.from("uni_payments").select("amount").eq("student_id", sid).eq("session_id", s.session?.id ?? "").eq("status", "successful").eq("purpose", "school_fees"),
       ]);
       setD({
         student: st as unknown as Data["student"], semester: s, reg: reg as unknown as Data["reg"],

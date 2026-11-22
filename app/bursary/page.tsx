@@ -8,9 +8,10 @@ import { payCall } from "@/lib/admin";
 import { channelLabel } from "@/components/FeesCard";
 
 type Student = { id: string; matric_no: string; level: number; profile: { full_name: string } | null; programme: { name: string } | null };
-type Payment = { id: string; amount: number; reference: string; channel: string; status: string; paid_at: string; note: string | null; student_id: string; session_id: string };
+type Payment = { id: string; amount: number; reference: string; channel: string; status: string; paid_at: string; note: string | null; student_id: string; session_id: string; purpose: "school_fees" | "hostel" };
 type Fee = { name: string; amount: number; level: number | null; programme: { name: string } | null };
-type Manual = { student_id: string; amount: string; reference: string; channel: string; paid_on: string; note: string };
+type Manual = { student_id: string; amount: string; reference: string; channel: string; paid_on: string; note: string; purpose: "school_fees" | "hostel" };
+type HostelRow = { id: string; student_id: string; status: string; amount: number; expires_at: string | null; hostel: { name: string } | null; bed: { label: string; room: { name: string } | null } | null };
 type PayStatus = { online: boolean; mode: "test" | "live" | null; demo: boolean };
 
 function Bursary() {
@@ -18,7 +19,8 @@ function Bursary() {
   const [rows, setRows] = useState<{ s: Student; due: number; paid: number }[] | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [fees, setFees] = useState<Fee[]>([]);
-  const [tab, setTab] = useState<"balances" | "payments">("balances");
+  const [tab, setTab] = useState<"balances" | "hostel" | "payments">("balances");
+  const [hostelRows, setHostelRows] = useState<HostelRow[]>([]);
   const [filter, setFilter] = useState<"all" | "owing" | "cleared">("all");
   const [payFilter, setPayFilter] = useState("all");
   const [q, setQ] = useState("");
@@ -31,18 +33,21 @@ function Bursary() {
     const { data: ses } = await supabase.from("uni_sessions").select("id, name").eq("is_current", true).single();
     if (!ses) return;
     setSession(ses);
-    const [{ data: st }, { data: pay }, { data: fi }] = await Promise.all([
+    const [{ data: st }, { data: pay }, { data: fi }, { data: ha }] = await Promise.all([
       supabase.from("uni_students").select("id, matric_no, level, profile:uni_profiles(full_name), programme:uni_programmes(name)").order("matric_no"),
-      supabase.from("uni_payments").select("id, amount, reference, channel, status, paid_at, note, student_id, session_id").eq("session_id", ses.id).order("paid_at", { ascending: false }),
+      supabase.from("uni_payments").select("id, amount, reference, channel, status, paid_at, note, student_id, session_id, purpose").eq("session_id", ses.id).order("paid_at", { ascending: false }),
       supabase.from("uni_fee_items").select("name, amount, level, programme:uni_programmes(name)").eq("session_id", ses.id).order("amount", { ascending: false }),
+      supabase.from("uni_hostel_allocations").select("id, student_id, status, amount, expires_at, hostel:uni_hostels(name), bed:uni_hostel_beds(label, room:uni_hostel_rooms(name))")
+        .eq("session_id", ses.id).in("status", ["reserved", "confirmed", "checked_in", "checked_out", "expired"]).order("reserved_at", { ascending: false }),
     ]);
+    setHostelRows((ha as unknown as HostelRow[]) ?? []);
     const students = (st as unknown as Student[]) ?? [];
     const pays = (pay as Payment[]) ?? [];
     setPayments(pays);
     setFees((fi as unknown as Fee[]) ?? []);
     const withDue = await Promise.all(students.map(async (s) => {
       const { data: d } = await supabase.rpc("uni_fees_due", { p_student: s.id, p_session: ses.id });
-      const paid = pays.filter((p) => p.student_id === s.id && p.status === "successful").reduce((a, p) => a + Number(p.amount), 0);
+      const paid = pays.filter((p) => p.student_id === s.id && p.status === "successful" && p.purpose === "school_fees").reduce((a, p) => a + Number(p.amount), 0);
       return { s, due: Number(d ?? 0), paid };
     }));
     setRows(withDue);
@@ -65,7 +70,7 @@ function Bursary() {
     if (!manual) return;
     setBusy(true); setMsg(null);
     const { error } = await supabase.rpc("uni_record_manual_payment", {
-      p_student: manual.student_id, p_amount: Number(manual.amount), p_reference: manual.reference, p_channel: manual.channel, p_paid_on: manual.paid_on, p_note: manual.note,
+      p_student: manual.student_id, p_amount: Number(manual.amount), p_reference: manual.reference, p_channel: manual.channel, p_paid_on: manual.paid_on, p_note: manual.note, p_purpose: manual.purpose,
     });
     setBusy(false);
     if (error) setMsg({ kind: "error", text: errMsg(error) });
@@ -83,7 +88,7 @@ function Bursary() {
   return (
     <>
       <PageHead title="Fees and payments" sub={session ? `${session.name} session` : undefined}
-        right={<Button onClick={() => setManual({ student_id: rows?.[0]?.s.id ?? "", amount: "", reference: "", channel: "bank_teller", paid_on: today, note: "" })} disabled={!rows?.length}>Record bank payment</Button>} />
+        right={<Button onClick={() => setManual({ student_id: rows?.[0]?.s.id ?? "", amount: "", reference: "", channel: "bank_teller", paid_on: today, note: "", purpose: "school_fees" })} disabled={!rows?.length}>Record bank payment</Button>} />
       {msg && <Notice kind={msg.kind} onClose={() => setMsg(null)}>{msg.text}</Notice>}
       {status && !status.online && <Notice kind="info">Online payment (Paystack) is not switched on yet. Students {status.demo ? "see a demo pay button that records payments without moving money" : "pay at the bank; record their tellers here"}.</Notice>}
       {status?.online && status.demo && <Notice kind="error">Paystack is on, but demo payments are still allowed. Switch them off under Rules so students cannot mark fees paid without paying.</Notice>}
@@ -96,7 +101,7 @@ function Bursary() {
         <Stat label="Students owing" value={owing} tone={owing ? "bad" : "good"} note={pending.length ? `${pending.length} online payment(s) pending` : "Blocked from course registration"} />
       </div>
 
-      <Tabs value={tab} onChange={setTab} items={[{ value: "balances", label: "Student balances" }, { value: "payments", label: `Payments (${payments.length})` }]} />
+      <Tabs value={tab} onChange={setTab} items={[{ value: "balances", label: "School fees" }, { value: "hostel", label: `Hostel fees (${hostelRows.length})` }, { value: "payments", label: `Payments (${payments.length})` }]} />
 
       {tab === "balances" && (
         <div className="grid gap-4 lg:grid-cols-3">
@@ -138,6 +143,33 @@ function Bursary() {
         </div>
       )}
 
+      {tab === "hostel" && (
+        <Card title="Hostel fees this session" right={<span className="text-xs text-ink-3">A bed is confirmed automatically once its fee is paid</span>}>
+          {hostelRows.length === 0 ? <Empty>No hostel applications this session.</Empty> : (
+            <Table head={["Student", "Hall and room", "Fee", "Paid", "Status", ""]}>
+              {hostelRows.map((h) => {
+                const paid = payments.filter((p) => p.student_id === h.student_id && p.status === "successful" && p.purpose === "hostel").reduce((a, p) => a + Number(p.amount), 0);
+                const lapsed = h.status === "expired" || (h.status === "reserved" && h.expires_at && new Date(h.expires_at) < new Date() && paid < h.amount);
+                return (
+                  <tr key={h.id}>
+                    <td className={td}>{names[h.student_id]}</td>
+                    <td className={td}>{h.hostel?.name} · {h.bed?.room?.name}{h.bed?.label}</td>
+                    <td className={`${td} tabular-nums`}>{naira(h.amount)}</td>
+                    <td className={`${td} tabular-nums`}>{naira(paid)}</td>
+                    <td className={td}>{lapsed ? (paid >= h.amount ? <Pill tone="bad">Paid, bed lapsed: hostel office to place</Pill> : <Pill tone="mute">Reservation lapsed</Pill>)
+                      : h.status === "reserved" ? <Pill tone="warn">Awaiting payment</Pill> : <Pill tone="good">Paid</Pill>}</td>
+                    <td className={`${td} text-right`}>
+                      {h.status === "reserved" && !lapsed && <button className="text-xs text-brand hover:underline"
+                        onClick={() => setManual({ student_id: h.student_id, amount: String(Math.max(0, h.amount - paid)), reference: "", channel: "bank_teller", paid_on: today, note: "", purpose: "hostel" })}>Record bank payment</button>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </Table>
+          )}
+        </Card>
+      )}
+
       {tab === "payments" && (
         <Card title="All payments this session"
           right={<div className="flex gap-2">
@@ -148,11 +180,12 @@ function Bursary() {
             </select>
           </div>}>
           {shownPays.length === 0 ? <Empty>No payments match.</Empty> : (
-            <Table head={["Date", "Student", "Reference", "Method", "Amount", "Status", ""]}>
+            <Table head={["Date", "Student", "For", "Reference", "Method", "Amount", "Status", ""]}>
               {shownPays.map((p) => (
                 <tr key={p.id}>
                   <td className={`${td} text-xs text-ink-3 whitespace-nowrap`}>{new Date(p.paid_at).toLocaleDateString("en-NG", { dateStyle: "medium" })}</td>
                   <td className={td}>{names[p.student_id]}</td>
+                  <td className={td}>{p.purpose === "hostel" ? <Pill tone="info">Hostel</Pill> : <Pill>School fees</Pill>}</td>
                   <td className={`${td} font-mono text-xs`}>{p.reference}{p.note && <div className="font-sans text-ink-3">{p.note}</div>}</td>
                   <td className={td}><Pill>{channelLabel[p.channel] ?? p.channel}</Pill></td>
                   <td className={`${td} tabular-nums font-medium`}>{naira(p.amount)}</td>
@@ -171,9 +204,14 @@ function Bursary() {
       {manual && rows && (
         <Modal title="Record bank payment" onClose={() => setManual(null)}>
           <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); saveManual(); }}>
+            <Field label="Payment for">
+              <select className="input w-full" value={manual.purpose} onChange={(e) => setManual({ ...manual, purpose: e.target.value as Manual["purpose"] })}>
+                <option value="school_fees">School fees</option><option value="hostel">Hostel fee</option>
+              </select>
+            </Field>
             <Field label="Student">
               <select className="input w-full" value={manual.student_id} onChange={(e) => setManual({ ...manual, student_id: e.target.value })}>
-                {rows.map(({ s, due, paid }) => <option key={s.id} value={s.id}>{s.matric_no} · {s.profile?.full_name}{due - paid > 0 ? ` (owes ${naira(due - paid)})` : " (cleared)"}</option>)}
+                {rows.map(({ s, due, paid }) => <option key={s.id} value={s.id}>{s.matric_no} · {s.profile?.full_name}{manual.purpose === "hostel" ? "" : due - paid > 0 ? ` (owes ${naira(due - paid)})` : " (cleared)"}</option>)}
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-3">

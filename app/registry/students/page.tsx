@@ -8,7 +8,7 @@ import { degreeClass, type DegreeClass, type GpaRow } from "@/lib/student";
 import { adminCall, parseCsv, downloadText } from "@/lib/admin";
 
 type S = {
-  id: string; matric_no: string; level: number; status: string; programme_id: string;
+  id: string; matric_no: string; level: number; status: string; programme_id: string; gender: string | null;
   profile: { full_name: string; email: string; is_active: boolean; must_change_password: boolean } | null;
   programme: { name: string; award: string; department: { code: string } | null } | null;
   regs: { status: string; semester: { is_current: boolean } | null }[];
@@ -19,7 +19,7 @@ type ImportResult = { row: number; ok: boolean; email: string; full_name: string
 
 const LEVELS = [100, 200, 300, 400, 500, 600, 700];
 const STATUSES = ["active", "deferred", "withdrawn", "graduated"];
-const TEMPLATE = "full_name,email,programme,level,matric_no\nAmaka Obi,amaka.obi@example.edu.ng,Computer Science,100,\nYusuf Bello,yusuf.bello@example.edu.ng,Accounting,100,\n";
+const TEMPLATE = "full_name,email,programme,level,gender,matric_no\nAmaka Obi,amaka.obi@example.edu.ng,Computer Science,100,female,\nYusuf Bello,yusuf.bello@example.edu.ng,Accounting,100,male,\n";
 
 function Students() {
   const [list, setList] = useState<S[] | null>(null);
@@ -27,8 +27,8 @@ function Students() {
   const [cgpa, setCgpa] = useState<Record<string, number | null>>({});
   const [classes, setClasses] = useState<DegreeClass[]>([]);
   const [q, setQ] = useState("");
-  const [add, setAdd] = useState<{ full_name: string; email: string; programme_id: string; level: number; matric_no: string } | null>(null);
-  const [edit, setEdit] = useState<{ id: string; name: string; programme_id: string; level: number; status: string } | null>(null);
+  const [add, setAdd] = useState<{ full_name: string; email: string; programme_id: string; level: number; matric_no: string; gender: string } | null>(null);
+  const [edit, setEdit] = useState<{ id: string; name: string; programme_id: string; level: number; status: string; gender: string } | null>(null);
   const [importing, setImporting] = useState<{ rows: Record<string, string>[]; results: ImportResult[] | null; progress: number } | null>(null);
   const [creds, setCreds] = useState<Cred[] | null>(null);
   const [msg, setMsg] = useState<{ kind: "error" | "success"; text: string } | null>(null);
@@ -37,7 +37,7 @@ function Students() {
   const load = useCallback(async () => {
     const [{ data }, { data: p }, { data: c }] = await Promise.all([
       supabase.from("uni_students")
-        .select("id, matric_no, level, status, programme_id, profile:uni_profiles(full_name, email, is_active, must_change_password), programme:uni_programmes(name, award, department:uni_departments(code)), regs:uni_registrations(status, semester:uni_semesters(is_current))")
+        .select("id, matric_no, level, status, programme_id, gender, profile:uni_profiles(full_name, email, is_active, must_change_password), programme:uni_programmes(name, award, department:uni_departments(code)), regs:uni_registrations(status, semester:uni_semesters(is_current))")
         .order("matric_no"),
       supabase.from("uni_programmes").select("id, name, award").order("name"),
       supabase.from("uni_degree_classes").select("name, min_cgpa"),
@@ -71,7 +71,7 @@ function Students() {
   async function saveEdit() {
     if (!edit) return;
     setBusy(true); setMsg(null);
-    const { error } = await supabase.from("uni_students").update({ programme_id: edit.programme_id, level: edit.level, status: edit.status }).eq("id", edit.id);
+    const { error } = await supabase.from("uni_students").update({ programme_id: edit.programme_id, level: edit.level, gender: edit.gender || null, ...(edit.status === "graduated" ? {} : { status: edit.status }) }).eq("id", edit.id);
     setBusy(false);
     if (error) setMsg({ kind: "error", text: errMsg(error) });
     else { setMsg({ kind: "success", text: `${edit.name}'s record updated.` }); setEdit(null); load(); }
@@ -79,7 +79,7 @@ function Students() {
 
   async function onFile(file: File) {
     const rows = parseCsv(await file.text());
-    if (!rows.length) { setMsg({ kind: "error", text: "That file has no student rows. Use the template: full_name, email, programme, level, matric_no." }); return; }
+    if (!rows.length) { setMsg({ kind: "error", text: "That file has no student rows. Use the template: full_name, email, programme, level, gender, matric_no." }); return; }
     const missing = ["full_name", "email", "programme", "level"].filter((h) => !(h in rows[0]));
     if (missing.length) { setMsg({ kind: "error", text: `The file is missing these columns: ${missing.join(", ")}.` }); return; }
     setImporting({ rows, results: null, progress: 0 });
@@ -134,7 +134,7 @@ function Students() {
             Import students
             <input type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} />
           </label>
-          <Button onClick={() => setAdd({ full_name: "", email: "", programme_id: progs[0]?.id ?? "", level: 100, matric_no: "" })} disabled={!progs.length}>Add student</Button>
+          <Button onClick={() => setAdd({ full_name: "", email: "", programme_id: progs[0]?.id ?? "", level: 100, matric_no: "", gender: "" })} disabled={!progs.length}>Add student</Button>
         </div>} />
       {msg && <Notice kind={msg.kind} onClose={() => setMsg(null)}>{msg.text}</Notice>}
       {creds && <div className="mb-5"><Credentials items={creds} /><button className="mt-2 text-xs text-ink-3 hover:underline" onClick={() => setCreds(null)}>I have saved these, hide</button></div>}
@@ -162,7 +162,7 @@ function Students() {
                   <td className={`${td} text-right whitespace-nowrap`}>
                     <a className="mr-3 text-xs text-brand hover:underline" href={`/print/transcript/${s.id}`}>Transcript</a>
                     <a className="mr-3 text-xs text-brand hover:underline" href={`/print/course-form/${s.id}`}>Course form</a>
-                    <button className="mr-3 text-xs text-brand hover:underline" onClick={() => setEdit({ id: s.id, name: s.profile?.full_name ?? "", programme_id: s.programme_id, level: s.level, status: s.status })}>Edit</button>
+                    <button className="mr-3 text-xs text-brand hover:underline" onClick={() => setEdit({ id: s.id, name: s.profile?.full_name ?? "", programme_id: s.programme_id, level: s.level, status: s.status, gender: s.gender ?? "" })}>Edit</button>
                     <button className="mr-3 text-xs text-brand hover:underline" onClick={() => reset(s)}>Reset password</button>
                     <button className={`text-xs hover:underline ${s.profile?.is_active ? "text-bad" : "text-good"}`} onClick={() => toggleActive(s)}>{s.profile?.is_active ? "Deactivate" : "Reactivate"}</button>
                   </td>
@@ -190,6 +190,11 @@ function Students() {
                 </select>
               </Field>
             </div>
+            <Field label="Gender" hint="Decides which halls the student can be allocated to.">
+              <select className="input w-full" value={add.gender} onChange={(e) => setAdd({ ...add, gender: e.target.value })}>
+                <option value="">Not recorded</option><option value="female">Female</option><option value="male">Male</option>
+              </select>
+            </Field>
             <Field label="Matric number (optional)" hint="Leave blank to generate one automatically, e.g. UDU/CSC/26/0004.">
               <input className="input w-full uppercase" value={add.matric_no} onChange={(e) => setAdd({ ...add, matric_no: e.target.value })} />
             </Field>
@@ -215,12 +220,17 @@ function Students() {
                   {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
                 </select>
               </Field>
-              <Field label="Status">
-                <select className="input w-full" value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })}>
-                  {STATUSES.map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
+              <Field label="Status" hint={edit.status === "graduated" ? "Set by Confirm graduation; cannot be changed here." : undefined}>
+                <select className="input w-full" value={edit.status} disabled={edit.status === "graduated"} onChange={(e) => setEdit({ ...edit, status: e.target.value })}>
+                  {STATUSES.filter((s) => s !== "graduated" || edit.status === "graduated").map((s) => <option key={s} value={s}>{s[0].toUpperCase() + s.slice(1)}</option>)}
                 </select>
               </Field>
             </div>
+            <Field label="Gender" hint="Decides which halls the student can be allocated to.">
+              <select className="input w-full" value={edit.gender} onChange={(e) => setEdit({ ...edit, gender: e.target.value })}>
+                <option value="">Not recorded</option><option value="female">Female</option><option value="male">Male</option>
+              </select>
+            </Field>
             <div className="flex gap-2 pt-2">
               <Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save"}</Button>
               <Button variant="secondary" onClick={() => setEdit(null)}>Cancel</Button>
@@ -289,7 +299,7 @@ function Students() {
       )}
 
       <p className="mt-4 text-xs text-ink-3">
-        CSV columns: full_name, email, programme, level, matric_no (optional).{" "}
+        CSV columns: full_name, email, programme, level, gender (male/female), matric_no (optional).{" "}
         <button className="text-brand hover:underline" onClick={() => downloadText("unieducore-students-template.csv", TEMPLATE)}>Download template</button>
       </p>
     </>

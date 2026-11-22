@@ -1,4 +1,4 @@
-// UniEducore online fee payments via Paystack.
+// UniEducore online payments via Paystack: school fees and hostel fees (body.purpose = "hostel").
 //   POST /uni-payments            { action: "status" | "initialize" | "verify", ... }   (signed-in users)
 //   POST /uni-payments/webhook    Paystack event, verified by HMAC signature           (Paystack servers)
 // The Paystack secret key lives only in the PAYSTACK_SECRET_KEY function secret; until it is set,
@@ -90,21 +90,38 @@ Deno.serve(async (req) => {
       const callback = safeCallback(body.callback_url);
       if (!callback) return json({ error: "Invalid return address" }, 400);
 
+      const purpose = body.purpose === "hostel" ? "hostel" : "school_fees";
       const { data: st } = await db.from("uni_students").select("id, matric_no, tenant_id").eq("id", me.id).single();
       const { data: sem } = await db.from("uni_semesters").select("session_id").eq("tenant_id", me.tenant_id).eq("is_current", true).single();
-      const { data: due } = await db.rpc("uni_fees_due", { p_student: me.id, p_session: sem!.session_id });
-      const { data: pays } = await db.from("uni_payments").select("amount").eq("student_id", me.id).eq("session_id", sem!.session_id).eq("status", "successful");
-      const outstanding = Math.round((Number(due ?? 0) - (pays ?? []).reduce((a, p) => a + Number(p.amount), 0)) * 100) / 100;
-      if (outstanding <= 0) return json({ error: "You have no outstanding fees for this session" }, 400);
+      const { data: pays } = await db.from("uni_payments").select("amount")
+        .eq("student_id", me.id).eq("session_id", sem!.session_id).eq("status", "successful").eq("purpose", purpose);
+      const paid = (pays ?? []).reduce((a, p) => a + Number(p.amount), 0);
 
-      // Older unfinished attempts are superseded by this one
+      let due = 0;
+      let allocationId: string | null = null;
+      if (purpose === "hostel") {
+        // Only a live reservation can be paid for; a lapsed one must be applied for again
+        const { data: alloc } = await db.from("uni_hostel_allocations").select("id, amount, expires_at")
+          .eq("student_id", me.id).eq("session_id", sem!.session_id).eq("status", "reserved").maybeSingle();
+        if (!alloc) return json({ error: "You have no hostel reservation waiting for payment" }, 400);
+        if (alloc.expires_at && new Date(alloc.expires_at) < new Date()) return json({ error: "Your bed reservation has lapsed. Apply again from the Hostel page." }, 400);
+        due = Number(alloc.amount);
+        allocationId = alloc.id;
+      } else {
+        const { data: d } = await db.rpc("uni_fees_due", { p_student: me.id, p_session: sem!.session_id });
+        due = Number(d ?? 0);
+      }
+      const outstanding = Math.round((due - paid) * 100) / 100;
+      if (outstanding <= 0) return json({ error: purpose === "hostel" ? "Your hostel fee is already paid" : "You have no outstanding fees for this session" }, 400);
+
+      // Older unfinished attempts for the same purpose are superseded by this one
       await db.from("uni_payments").update({ status: "failed", note: "Superseded by a newer payment attempt" })
-        .eq("student_id", me.id).eq("session_id", sem!.session_id).eq("status", "pending").eq("channel", "paystack");
+        .eq("student_id", me.id).eq("session_id", sem!.session_id).eq("status", "pending").eq("channel", "paystack").eq("purpose", purpose);
 
       const reference = newReference();
       const { data: row, error: insErr } = await db.from("uni_payments").insert({
         tenant_id: me.tenant_id, student_id: me.id, session_id: sem!.session_id, amount: outstanding,
-        reference, channel: "paystack", status: "pending",
+        reference, channel: "paystack", status: "pending", purpose, allocation_id: allocationId,
       }).select("id").single();
       if (insErr) throw insErr;
 
@@ -113,11 +130,12 @@ Deno.serve(async (req) => {
           method: "POST",
           body: JSON.stringify({
             email: me.email, amount: toKobo(outstanding), currency: "NGN", reference, callback_url: callback,
-            metadata: { student_id: me.id, matric_no: st?.matric_no, session_id: sem!.session_id, payment_id: row.id,
-              custom_fields: [{ display_name: "Matric number", variable_name: "matric_no", value: st?.matric_no }] },
+            metadata: { student_id: me.id, matric_no: st?.matric_no, session_id: sem!.session_id, payment_id: row.id, purpose,
+              custom_fields: [{ display_name: "Matric number", variable_name: "matric_no", value: st?.matric_no },
+                { display_name: "Payment for", variable_name: "purpose", value: purpose === "hostel" ? "Hostel accommodation" : "School fees" }] },
           }),
         });
-        return json({ ok: true, reference, authorization_url: data.authorization_url, amount: outstanding });
+        return json({ ok: true, reference, authorization_url: data.authorization_url, amount: outstanding, purpose });
       } catch (e) {
         await db.from("uni_payments").update({ status: "failed", note: `Could not start payment: ${(e as Error).message}` }).eq("id", row.id);
         throw e;
@@ -126,15 +144,15 @@ Deno.serve(async (req) => {
 
     if (body.action === "verify") {
       const reference = String(body.reference ?? "");
-      const { data: p } = await db.from("uni_payments").select("id, tenant_id, student_id, amount, status, reference, channel").eq("reference", reference).maybeSingle();
+      const { data: p } = await db.from("uni_payments").select("id, tenant_id, student_id, amount, status, reference, channel, purpose").eq("reference", reference).maybeSingle();
       if (!p || p.tenant_id !== me.tenant_id) return json({ error: "Payment not found" }, 404);
       const staff = ["bursar", "registrar", "admin"].includes(me.role);
       if (p.student_id !== me.id && !staff) return json({ error: "Payment not found" }, 404);
-      if (p.status === "successful" || p.channel !== "paystack") return json({ ok: true, status: p.status, amount: p.amount, reference });
+      if (p.status === "successful" || p.channel !== "paystack") return json({ ok: true, status: p.status, amount: p.amount, reference, purpose: p.purpose });
       if (!SECRET) return json({ error: "Online payment is not set up" }, 503);
       const tx = await paystack(`/transaction/verify/${encodeURIComponent(reference)}`);
       const outcome = await apply(db, p as Payment, tx, staff ? "staff_verify" : "student_return");
-      return json({ ok: true, status: outcome, amount: p.amount, reference });
+      return json({ ok: true, status: outcome, amount: p.amount, reference, purpose: p.purpose });
     }
 
     return json({ error: "Unknown action" }, 400);

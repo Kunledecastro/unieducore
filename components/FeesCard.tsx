@@ -13,8 +13,11 @@ export const channelLabel: Record<string, string> = {
   paystack: "Paystack (card/transfer)", bank_teller: "Bank teller", bank_transfer: "Bank transfer", pos: "POS", demo: "Demo",
 };
 
-export function FeesCard({ studentId, sessionId, sessionName, due, paid, onChange }: {
+export type PayPurpose = "school_fees" | "hostel";
+
+export function FeesCard({ studentId, sessionId, sessionName, due, paid, onChange, purpose = "school_fees", title, payable = true }: {
   studentId: string; sessionId?: string; sessionName?: string; due: number; paid: number; onChange: () => void;
+  purpose?: PayPurpose; title?: string; payable?: boolean;
 }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [pays, setPays] = useState<Pay[]>([]);
@@ -25,9 +28,9 @@ export function FeesCard({ studentId, sessionId, sessionName, due, paid, onChang
   const load = useCallback(async () => {
     if (!sessionId) return;
     const { data } = await supabase.from("uni_payments").select("id, amount, reference, channel, status, paid_at")
-      .eq("student_id", studentId).eq("session_id", sessionId).order("paid_at", { ascending: false });
+      .eq("student_id", studentId).eq("session_id", sessionId).eq("purpose", purpose).order("paid_at", { ascending: false });
     setPays((data as Pay[]) ?? []);
-  }, [studentId, sessionId]);
+  }, [studentId, sessionId, purpose]);
 
   useEffect(() => {
     load();
@@ -37,21 +40,21 @@ export function FeesCard({ studentId, sessionId, sessionName, due, paid, onChang
   async function payOnline() {
     setBusy(true); setMsg(null);
     try {
-      const out = await payCall<{ authorization_url: string }>({ action: "initialize", callback_url: window.location.href });
+      const out = await payCall<{ authorization_url: string }>({ action: "initialize", callback_url: window.location.href, purpose });
       window.location.href = out.authorization_url; // Paystack checkout, then back to /student/payment
     } catch (e) { setMsg({ kind: "error", text: errMsg(e) }); setBusy(false); }
   }
 
   async function payDemo() {
     setBusy(true); setMsg(null);
-    const { data, error } = await supabase.rpc("uni_pay_fees_demo");
+    const { data, error } = await supabase.rpc(purpose === "hostel" ? "uni_hostel_pay_demo" : "uni_pay_fees_demo");
     setBusy(false);
     if (error) setMsg({ kind: "error", text: errMsg(error) });
     else { setMsg({ kind: "success", text: `Demo payment of ${naira(data as number)} recorded. No money moved.` }); load(); onChange(); }
   }
 
   return (
-    <Card title={`Fees · ${sessionName ?? ""}`} right={status?.online && status.mode === "test" ? <Pill tone="warn">Paystack test mode</Pill> : undefined}>
+    <Card title={title ?? `Fees · ${sessionName ?? ""}`} right={status?.online && status.mode === "test" ? <Pill tone="warn">Paystack test mode</Pill> : undefined}>
       {msg && <Notice kind={msg.kind} onClose={() => setMsg(null)}>{msg.text}</Notice>}
       <dl className="grid grid-cols-3 gap-3 text-sm">
         <div><dt className="text-ink-3">Due</dt><dd className="font-medium tabular-nums">{naira(due)}</dd></div>
@@ -60,7 +63,7 @@ export function FeesCard({ studentId, sessionId, sessionName, due, paid, onChang
       </dl>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        {outstanding <= 0 ? <Pill tone="good">Fully paid</Pill> : !status ? <span className="text-xs text-ink-3">Checking payment options…</span> : (
+        {outstanding <= 0 ? <Pill tone="good">Fully paid</Pill> : !payable ? null : !status ? <span className="text-xs text-ink-3">Checking payment options…</span> : (
           <>
             {status.online && <Button onClick={payOnline} disabled={busy}>{busy ? "Opening Paystack…" : `Pay ${naira(outstanding)} online`}</Button>}
             {!status.online && status.demo && <Button onClick={payDemo} disabled={busy}>{busy ? "Processing…" : `Pay ${naira(outstanding)} (demo)`}</Button>}
@@ -68,8 +71,8 @@ export function FeesCard({ studentId, sessionId, sessionName, due, paid, onChang
           </>
         )}
       </div>
-      {outstanding > 0 && status?.online && <p className="mt-2 text-xs text-ink-3">Card, bank transfer or USSD through Paystack. Your fees are marked paid as soon as Paystack confirms.</p>}
-      {outstanding > 0 && status && !status.online && status.demo && <p className="mt-2 text-xs text-ink-3">Online payment is not set up yet, so this demo button records a payment without moving money.</p>}
+      {payable && outstanding > 0 && status?.online && <p className="mt-2 text-xs text-ink-3">Card, bank transfer or USSD through Paystack. {purpose === "hostel" ? "Your bed is confirmed" : "Your fees are marked paid"} as soon as Paystack confirms.</p>}
+      {payable && outstanding > 0 && status && !status.online && status.demo && <p className="mt-2 text-xs text-ink-3">Online payment is not set up yet, so this demo button records a payment without moving money.</p>}
 
       {pays.length > 0 && (
         <ul className="mt-4 divide-y divide-line border-t border-line text-sm">

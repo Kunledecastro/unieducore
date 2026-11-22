@@ -6,18 +6,20 @@ import { Card, PageHead, Button, Notice, Modal, Field, Pill, Table, td, Credenti
 import { supabase, errMsg, type Role } from "@/lib/supabase";
 import { adminCall } from "@/lib/admin";
 
-type Staff = { id: string; full_name: string; email: string; role: Role; department_id: string | null; is_active: boolean; must_change_password: boolean; department: { code: string; name: string } | null };
+type Staff = { id: string; full_name: string; email: string; role: Role; department_id: string | null; hostel_id: string | null; is_active: boolean; must_change_password: boolean; department: { code: string; name: string } | null; hostel: { name: string } | null };
+type Hall = { id: string; name: string };
 type Dept = { id: string; name: string; code: string };
-type Form = { id?: string; full_name: string; email: string; role: Role; department_id: string };
+type Form = { id?: string; full_name: string; email: string; role: Role; department_id: string; hostel_id: string };
 type Cred = { name: string; email: string; password: string; extra?: string };
 
-const roleLabel: Record<string, string> = { admin: "Administrator", registrar: "Registry", hod: "Head of Department", lecturer: "Lecturer", bursar: "Bursary" };
+const roleLabel: Record<string, string> = { admin: "Administrator", registrar: "Registry", hod: "Head of Department", lecturer: "Lecturer", bursar: "Bursary", hostel_officer: "Hostel officer", porter: "Hall porter" };
 const needsDept = (r: Role) => r === "hod" || r === "lecturer";
 
 function StaffPage() {
   const { profile } = useAuth();
   const [list, setList] = useState<Staff[] | null>(null);
   const [depts, setDepts] = useState<Dept[]>([]);
+  const [halls, setHalls] = useState<Hall[]>([]);
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [form, setForm] = useState<Form | null>(null);
@@ -26,16 +28,18 @@ function StaffPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [s, d] = await Promise.all([
-      supabase.from("uni_profiles").select("id, full_name, email, role, department_id, is_active, must_change_password, department:uni_departments(code, name)").neq("role", "student").order("full_name"),
+    const [s, d, h] = await Promise.all([
+      supabase.from("uni_profiles").select("id, full_name, email, role, department_id, hostel_id, is_active, must_change_password, department:uni_departments(code, name), hostel:uni_hostels(name)").neq("role", "student").order("full_name"),
       supabase.from("uni_departments").select("id, name, code").order("name"),
+      supabase.from("uni_hostels").select("id, name").order("name"),
     ]);
+    setHalls((h.data as Hall[]) ?? []);
     setList((s.data as unknown as Staff[]) ?? []);
     setDepts((d.data as Dept[]) ?? []);
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const roles: Role[] = profile?.role === "admin" ? ["lecturer", "hod", "registrar", "bursar", "admin"] : ["lecturer", "hod", "registrar", "bursar"];
+  const roles: Role[] = profile?.role === "admin" ? ["lecturer", "hod", "registrar", "bursar", "hostel_officer", "porter", "admin"] : ["lecturer", "hod", "registrar", "bursar", "hostel_officer", "porter"];
   const shown = (list ?? []).filter((s) => (!roleFilter || s.role === roleFilter) && (!q || `${s.full_name} ${s.email}`.toLowerCase().includes(q.toLowerCase())));
 
   async function save() {
@@ -45,12 +49,13 @@ function StaffPage() {
       if (form.id) {
         const { error } = await supabase.from("uni_profiles").update({
           full_name: form.full_name.trim(), role: form.role, department_id: needsDept(form.role) ? form.department_id : null,
+          hostel_id: form.role === "porter" ? form.hostel_id : null,
         }).eq("id", form.id);
         if (error) throw error;
         setMsg({ kind: "success", text: `${form.full_name} updated.` });
       } else {
         const out = await adminCall<{ user: { full_name: string; email: string; temp_password: string; role: string } }>({
-          action: "create_user", user: { full_name: form.full_name, email: form.email, role: form.role, department_id: needsDept(form.role) ? form.department_id : null },
+          action: "create_user", user: { full_name: form.full_name, email: form.email, role: form.role, department_id: needsDept(form.role) ? form.department_id : null, hostel_id: form.role === "porter" ? form.hostel_id : null },
         });
         setCreds([{ name: out.user.full_name, email: out.user.email, password: out.user.temp_password, extra: roleLabel[out.user.role] }]);
       }
@@ -75,12 +80,12 @@ function StaffPage() {
     } catch (e) { setMsg({ kind: "error", text: errMsg(e) }); }
   }
 
-  const formValid = form && form.full_name.trim() && (form.id || /\S+@\S+\.\S+/.test(form.email)) && (!needsDept(form.role) || form.department_id);
+  const formValid = form && form.full_name.trim() && (form.id || /\S+@\S+\.\S+/.test(form.email)) && (!needsDept(form.role) || form.department_id) && (form.role !== "porter" || form.hostel_id);
 
   return (
     <>
-      <PageHead title="Staff" sub="Lecturers, Heads of Department, Registry and Bursary accounts."
-        right={<Button onClick={() => setForm({ full_name: "", email: "", role: "lecturer", department_id: depts[0]?.id ?? "" })}>Add staff</Button>} />
+      <PageHead title="Staff" sub="Lecturers, Heads of Department, Registry, Bursary and hostel staff accounts."
+        right={<Button onClick={() => setForm({ full_name: "", email: "", role: "lecturer", department_id: depts[0]?.id ?? "", hostel_id: halls[0]?.id ?? "" })}>Add staff</Button>} />
       {msg && <Notice kind={msg.kind} onClose={() => setMsg(null)}>{msg.text}</Notice>}
       {creds && <div className="mb-5"><Credentials items={creds} /><button className="mt-2 text-xs text-ink-3 hover:underline" onClick={() => setCreds(null)}>I have saved these, hide</button></div>}
 
@@ -93,16 +98,16 @@ function StaffPage() {
           </select>
         </div>}>
         {!list ? <p className="text-sm text-ink-3">Loading…</p> : (
-          <Table head={["Name", "Role", "Department", "Status", ""]}>
+          <Table head={["Name", "Role", "Department / hall", "Status", ""]}>
             {shown.map((s) => (
               <tr key={s.id} className={s.is_active ? "" : "opacity-60"}>
                 <td className={td}>{s.full_name}<div className="text-xs text-ink-3">{s.email}</div></td>
                 <td className={td}>{roleLabel[s.role] ?? s.role}</td>
-                <td className={td}>{s.department?.name ?? "—"}</td>
+                <td className={td}>{s.department?.name ?? s.hostel?.name ?? "—"}</td>
                 <td className={td}>{!s.is_active ? <Pill tone="bad">Deactivated</Pill> : s.must_change_password ? <Pill tone="warn">Awaiting first sign-in</Pill> : <Pill tone="good">Active</Pill>}</td>
                 <td className={`${td} text-right whitespace-nowrap`}>
                   {s.id !== profile?.id && (s.role !== "admin" || profile?.role === "admin") && <>
-                    <button className="mr-3 text-xs text-brand hover:underline" onClick={() => setForm({ id: s.id, full_name: s.full_name, email: s.email, role: s.role, department_id: s.department_id ?? depts[0]?.id ?? "" })}>Edit</button>
+                    <button className="mr-3 text-xs text-brand hover:underline" onClick={() => setForm({ id: s.id, full_name: s.full_name, email: s.email, role: s.role, department_id: s.department_id ?? depts[0]?.id ?? "", hostel_id: s.hostel_id ?? halls[0]?.id ?? "" })}>Edit</button>
                     <button className="mr-3 text-xs text-brand hover:underline" onClick={() => reset(s)}>Reset password</button>
                     <button className={`text-xs hover:underline ${s.is_active ? "text-bad" : "text-good"}`} onClick={() => toggleActive(s)}>{s.is_active ? "Deactivate" : "Reactivate"}</button>
                   </>}
@@ -131,6 +136,14 @@ function StaffPage() {
                 <Field label="Department">
                   <select className="input w-full" value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>
                     {depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </Field>
+              )}
+              {form.role === "porter" && (
+                <Field label="Hall">
+                  <select className="input w-full" value={form.hostel_id} onChange={(e) => setForm({ ...form, hostel_id: e.target.value })}>
+                    {halls.length === 0 && <option value="">Add halls first (Hostel office)</option>}
+                    {halls.map((h) => <option key={h.id} value={h.id}>{h.name}</option>)}
                   </select>
                 </Field>
               )}

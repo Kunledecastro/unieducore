@@ -14,7 +14,7 @@ async function loadProfile(): Promise<Profile | null> {
   if (!s.session) return null;
   const { data } = await supabase
     .from("uni_profiles")
-    .select("id, tenant_id, full_name, email, role, department_id, must_change_password, is_active, tenant:uni_tenants(name, short_name), department:uni_departments(name, code)")
+    .select("id, tenant_id, full_name, email, role, department_id, hostel_id, must_change_password, is_active, tenant:uni_tenants(name, short_name), department:uni_departments(name, code), hostel:uni_hostels(name)")
     .eq("id", s.session.user.id)
     .single();
   return (data as unknown as Profile) ?? null;
@@ -53,16 +53,18 @@ const registryNav = [
 ];
 
 const navFor: Record<Role, { href: string; label: string }[]> = {
-  student: [{ href: "/student", label: "Overview" }, { href: "/student/registration", label: "Course registration" }, { href: "/student/results", label: "Results" }],
+  student: [{ href: "/student", label: "Overview" }, { href: "/student/registration", label: "Course registration" }, { href: "/student/results", label: "Results" }, { href: "/student/hostel", label: "Hostel" }],
   lecturer: [{ href: "/lecturer", label: "My courses" }],
   hod: [{ href: "/hod", label: "Approvals" }, { href: "/registry/standing", label: "Standing" }, { href: "/lecturer", label: "My courses" }],
   registrar: registryNav,
-  admin: registryNav,
+  admin: [...registryNav, { href: "/hostel", label: "Hostels" }],
   bursar: [{ href: "/bursary", label: "Fees and payments" }],
+  hostel_officer: [{ href: "/hostel", label: "Allocations" }, { href: "/hostel/requests", label: "Requests" }, { href: "/hostel/setup", label: "Halls and rooms" }],
+  porter: [{ href: "/porter", label: "My hall" }],
 };
 
 const roleName: Record<Role, string> = {
-  student: "Student", lecturer: "Lecturer", hod: "Head of Department", registrar: "Registry", admin: "Administrator", bursar: "Bursary",
+  student: "Student", lecturer: "Lecturer", hod: "Head of Department", registrar: "Registry", admin: "Administrator", bursar: "Bursary", hostel_officer: "Hostel office", porter: "Porter",
 };
 
 export function Shell({ allow, children }: { allow: Role[]; children: ReactNode }) {
@@ -106,7 +108,7 @@ export function Shell({ allow, children }: { allow: Role[]; children: ReactNode 
           <div className="ml-auto flex items-center gap-3 text-sm">
             <span className="text-right leading-tight hidden sm:block">
               <span className="block text-ink">{profile.full_name}</span>
-              <span className="block text-xs text-ink-3">{roleName[profile.role]}{profile.department ? ` · ${profile.department.code}` : ""}</span>
+              <span className="block text-xs text-ink-3">{roleName[profile.role]}{profile.department ? ` · ${profile.department.code}` : ""}{profile.hostel ? ` · ${profile.hostel.name}` : ""}</span>
             </span>
             <Link href="/account/password" className="text-ink-3 hover:text-ink text-xs">Password</Link>
             <button onClick={async () => { await signOut(); router.replace("/login"); }}

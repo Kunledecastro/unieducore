@@ -8,11 +8,13 @@ import { useAuth } from "@/components/auth";
 const DEMO_PASSWORD = "UniDemo2026!";
 const demos = [
   { email: "ada@udu.demo", who: "Ada Okafor", role: "Student · 200L Computer Science", note: "Has a carry-over, CGPA history" },
-  { email: "tunde@udu.demo", who: "Tunde Bakare", role: "Student · 100L Computer Science", note: "Registration awaiting HOD" },
+  { email: "tunde@udu.demo", who: "Tunde Bakare", role: "Student · 100L Computer Science", note: "Registration awaiting HOD; can apply for a hostel bed" },
   { email: "lecturer@udu.demo", who: "Dr. Bayo Ogunleye", role: "Lecturer · CSC", note: "Enter and submit scores" },
   { email: "hod.csc@udu.demo", who: "Dr. Emeka Nwosu", role: "HOD · Computer Science", note: "Approve registrations and results" },
   { email: "registrar@udu.demo", who: "Mrs. Folake Adeyemi", role: "Registry", note: "Senate approval and result release" },
   { email: "bursar@udu.demo", who: "Mr. Kola Adebayo", role: "Bursary", note: "Fees and payments" },
+  { email: "hostel@udu.demo", who: "Mrs. Funke Adebayo", role: "Hostel office", note: "Halls, allocations, exeats, faults" },
+  { email: "porter.amina@udu.demo", who: "Mrs. Grace Etim", role: "Porter · Queen Amina Hall", note: "Check-in, exeats at the gate, visitors" },
 ];
 
 export default function Login() {

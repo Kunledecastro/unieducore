@@ -31,7 +31,9 @@ Deploys: pushes to `main` deploy to production on Vercel (https://unieducore.ver
 | lecturer@udu.demo | Lecturer | Enter CSC101 scores and submit |
 | hod.csc@udu.demo | HOD Computer Science | Approve Tunde's course form; approve CSC103 result |
 | registrar@udu.demo | Registry | Senate approval and release (GST101 is waiting) |
-| bursar@udu.demo | Bursary | Balances and payments |
+| bursar@udu.demo | Bursary | Balances and payments (school and hostel fees) |
+| hostel@udu.demo | Hostel office | Halls and rooms, allocations, room changes, exeats, maintenance |
+| porter.amina@udu.demo / porter.awo@udu.demo | Hall porters | Check-in/out, exeats at the gate, visitors, faults (own hall only) |
 
 ## How the rules are enforced
 All writes go through Postgres functions, so the browser can't bypass a rule:
@@ -86,6 +88,16 @@ Registry → Standing (HODs see their own department). Computed from **released*
 - **Confirm graduation** (Registry): `uni_confirm_graduation(ids)` re-checks every student and refuses the whole batch if any is ineligible; sets status Graduated and fixes the final CGPA and class of degree, which later rule changes do not alter. Transcripts show the confirmed class and date.
 - CGPA counts every attempt (a failed attempt and its retake both count), the common Nigerian convention.
 
+## Hostel management
+Apply → pay → auto-allocate, first come first served.
+- **Student → Hostel:** pick a hall and room type (only halls for their gender and rooms open to their level are offered). The first free bed is **reserved** and held for `hostel_hold_hours` (default 72). Paying the hostel fee (Paystack, bank payment recorded by the Bursary, or demo) **confirms** the bed automatically. Unpaid holds lapse and the bed is released. A payment that arrives after the hold lapsed reinstates the same bed if it is still free; otherwise the hostel office is alerted to place the student by hand.
+- **After confirmation:** allocation slip (`/print/hostel-slip/me`), room-mates' names, report a fault, request an exeat (once checked in), request a room change.
+- **Hostel office** (`hostel_officer` role; `/hostel`): occupancy per hall, all allocations, place a student in a specific bed, cancel. **Requests:** approve room changes (auto-picks a bed in another room, or choose one; never to a dearer room), approve/decline exeats, track maintenance to closed, read the visitor log. **Halls and rooms:** add halls (male/female), add rooms in bulk (A101 × 5 → A101–A105), beds per room, fee per bed, levels allowed, take rooms out of use; open/close applications, hold hours, whether school fees must be paid first.
+- **Porter** (`porter` role, linked to one hall; `/porter`): residents of their hall only, check in (paid students only) and check out with room condition, sign exeat departures and returns (overdue flagged), log visitors in/out, report and update faults. Porters cannot read the wider student directory, payments or results.
+- **Payments:** `uni_payments.purpose` is `school_fees` or `hostel`. School-fee balances, registration fee gating and receipts count only school fees; hostel receipts show the hall, room and bed.
+- **Students** need a gender on their record (Registry → Students, or the `gender` CSV column) before they can apply.
+- Every write goes through a database function that checks role, hall and status; all hostel tables are audited. Demo data: `supabase/seed/hostel_demo.sql`.
+
 ## Printable documents
 Print-ready A4 pages under `/print/…` ("Print / Save PDF" uses the browser's print dialog, so no PDF service is needed).
 
@@ -99,7 +111,7 @@ Print-ready A4 pages under `/print/…` ("Print / Save PDF" uses the browser's p
 Row Level Security: everything is scoped by tenant (university); students see only their own records and only *released* scores. Score, result, registration and payment changes are written to `uni_audit_log` by triggers.
 
 ## Configurable per university (no code change)
-`uni_settings` (unit limits, CA/exam split, probation CGPA, fee gating), `uni_grade_bands`, `uni_degree_classes`, faculties/departments/programmes/courses.
+`uni_settings` (unit limits, CA/exam split, probation CGPA, fee gating, hostel applications), `uni_grade_bands`, `uni_degree_classes`, faculties/departments/programmes/courses.
 
 ## Security
 See [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) (22 Nov 2026). Key guarantees enforced in the database: result approvals only move through the workflow functions; graduation is set only by Confirm graduation; scores are visible only to the course lecturer, the relevant HOD, the Registry and (once released) the student; deactivated accounts lose access immediately; every change is audited with the person who made it. New `uni_` tables must revoke privileges from `anon` (Supabase grants them by default).

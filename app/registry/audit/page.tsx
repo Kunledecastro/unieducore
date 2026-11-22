@@ -10,6 +10,9 @@ type Log = { id: number; table_name: string; action: string; old_data: Record<st
 const label: Record<string, string> = {
   uni_scores: "Score", uni_course_offerings: "Course offering", uni_registrations: "Registration", uni_payments: "Payment",
   accounts: "User account", imports: "Results import", graduation: "Graduation", uni_profiles: "Profile", uni_students: "Student record", uni_grade_bands: "Grading scale", uni_courses: "Course",
+  uni_settings: "Settings", uni_degree_classes: "Class of degree", uni_fee_items: "Fee item", uni_programme_courses: "Curriculum",
+  uni_hostels: "Hall", uni_hostel_rooms: "Hostel room", uni_hostel_allocations: "Hostel allocation", uni_hostel_change_requests: "Room change",
+  uni_hostel_maintenance: "Hostel fault", uni_hostel_exeats: "Exeat", uni_hostel_visitors: "Hostel visitor",
 };
 const accountAction: Record<string, string> = {
   IMPORT_RESULTS: "Imported", CONFIRM_GRADUATION: "Graduated",

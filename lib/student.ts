@@ -37,7 +37,7 @@ export function useStudent(userId: string | undefined) {
       const [{ data: reg }, { data: d }, { data: pays }] = await Promise.all([
         supabase.from("uni_registrations").select("id, status, submitted_at, decided_at").eq("student_id", userId).eq("semester_id", s.id).maybeSingle(),
         supabase.rpc("uni_fees_due", { p_student: userId, p_session: s.session.id }),
-        supabase.from("uni_payments").select("amount").eq("student_id", userId).eq("session_id", s.session.id).eq("status", "successful"),
+        supabase.from("uni_payments").select("amount").eq("student_id", userId).eq("session_id", s.session.id).eq("status", "successful").eq("purpose", "school_fees"),
       ]);
       setRegistration(reg as Registration | null);
       setDue(Number(d ?? 0));

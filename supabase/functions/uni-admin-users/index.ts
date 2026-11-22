@@ -12,8 +12,8 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
 type Me = { id: string; tenant_id: string; role: string; tenant: { short_name: string } };
-type Role = "admin" | "registrar" | "hod" | "lecturer" | "student" | "bursar";
-const STAFF_ROLES: Role[] = ["registrar", "hod", "lecturer", "bursar"];
+type Role = "admin" | "registrar" | "hod" | "lecturer" | "student" | "bursar" | "hostel_officer" | "porter";
+const STAFF_ROLES: Role[] = ["registrar", "hod", "lecturer", "bursar", "hostel_officer", "porter"];
 
 function tempPassword() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
@@ -50,6 +50,7 @@ async function nextMatric(db: SupabaseClient, me: Me, programmeId: string, count
 type NewUser = {
   full_name: string; email: string; role: Role; department_id?: string | null;
   programme_id?: string | null; level?: number | null; matric_no?: string | null;
+  hostel_id?: string | null; gender?: string | null;
 };
 
 async function createAccount(db: SupabaseClient, me: Me, u: NewUser, counters: Map<string, number>) {
@@ -67,6 +68,18 @@ async function createAccount(db: SupabaseClient, me: Me, u: NewUser, counters: M
     if (!d) throw new Error("Department not found");
     department_id = d.id;
   }
+
+  let hostel_id: string | null = null;
+  if (u.role === "porter") {
+    if (!u.hostel_id) throw new Error("Choose the hall this porter works in");
+    const { data: h } = await db.from("uni_hostels").select("id").eq("id", u.hostel_id).eq("tenant_id", me.tenant_id).maybeSingle();
+    if (!h) throw new Error("Hall not found");
+    hostel_id = h.id;
+  }
+
+  const genderRaw = String(u.gender ?? "").trim().toLowerCase();
+  const gender = genderRaw === "" ? null : ["male", "m"].includes(genderRaw) ? "male" : ["female", "f"].includes(genderRaw) ? "female" : undefined;
+  if (gender === undefined) throw new Error(`Gender "${u.gender}" should be male or female`);
 
   let matric_no: string | null = null;
   if (u.role === "student") {
@@ -89,13 +102,13 @@ async function createAccount(db: SupabaseClient, me: Me, u: NewUser, counters: M
 
   try {
     const { error: pErr } = await db.from("uni_profiles").insert({
-      id, tenant_id: me.tenant_id, full_name, email, role: u.role, department_id, must_change_password: true,
+      id, tenant_id: me.tenant_id, full_name, email, role: u.role, department_id, hostel_id, must_change_password: true,
     });
     if (pErr) throw pErr;
     if (u.role === "student") {
       const { data: ses } = await db.from("uni_sessions").select("id").eq("tenant_id", me.tenant_id).eq("is_current", true).maybeSingle();
       const { error: sErr } = await db.from("uni_students").insert({
-        id, tenant_id: me.tenant_id, matric_no, programme_id: u.programme_id, level: Number(u.level), entry_session_id: ses?.id ?? null,
+        id, tenant_id: me.tenant_id, matric_no, programme_id: u.programme_id, level: Number(u.level), entry_session_id: ses?.id ?? null, gender,
       });
       if (sErr) throw sErr;
     }
@@ -157,7 +170,7 @@ Deno.serve(async (req) => {
             const programme_id = byName.get(String(r.programme ?? "").trim().toLowerCase());
             if (!programme_id) throw new Error(`Unknown programme "${r.programme ?? ""}"`);
             const u = await createAccount(db, me, {
-              full_name: r.full_name, email: r.email, role: "student", programme_id, level: Number(r.level), matric_no: r.matric_no,
+              full_name: r.full_name, email: r.email, role: "student", programme_id, level: Number(r.level), matric_no: r.matric_no, gender: r.gender,
             }, counters);
             results.push({ row: i + 1, ok: true, ...u });
           } catch (e) {

@@ -11,6 +11,8 @@ type Payment = {
   id: string; amount: number; reference: string; channel: string; status: string; paid_at: string; verified_at: string | null; note: string | null;
   student_id: string; session: { id: string; name: string } | null;
   recorder: { full_name: string } | null;
+  purpose: "school_fees" | "hostel";
+  allocation: { amount: number; hostel: { name: string } | null; bed: { label: string; room: { name: string; room_type: string } | null } | null } | null;
 };
 type Student = { id: string; matric_no: string; level: number; programme_id: string; profile: { full_name: string; email: string } | null; programme: { name: string; award: string } | null };
 type Fee = { name: string; amount: number; programme_id: string | null; level: number | null };
@@ -28,14 +30,14 @@ function Receipt() {
     if (!profile) return;
     (async () => {
       const { data } = await supabase.from("uni_payments")
-        .select("id, amount, reference, channel, status, paid_at, verified_at, note, student_id, session:uni_sessions(id, name), recorder:uni_profiles!uni_payments_recorded_by_fkey(full_name)")
+        .select("id, amount, reference, channel, status, paid_at, verified_at, note, student_id, session:uni_sessions(id, name), recorder:uni_profiles!uni_payments_recorded_by_fkey(full_name), purpose, allocation:uni_hostel_allocations(amount, hostel:uni_hostels(name), bed:uni_hostel_beds(label, room:uni_hostel_rooms(name, room_type)))")
         .eq("reference", decodeURIComponent(reference)).maybeSingle();
       if (!data) { setErr("Receipt not found."); return; }
       const pay = data as unknown as Payment;
       const [{ data: s }, { data: f }, { data: all }] = await Promise.all([
         supabase.from("uni_students").select("id, matric_no, level, programme_id, profile:uni_profiles(full_name, email), programme:uni_programmes(name, award)").eq("id", pay.student_id).single(),
         supabase.from("uni_fee_items").select("name, amount, programme_id, level").eq("session_id", pay.session?.id ?? ""),
-        supabase.from("uni_payments").select("amount, paid_at").eq("student_id", pay.student_id).eq("session_id", pay.session?.id ?? "").eq("status", "successful"),
+        supabase.from("uni_payments").select("amount, paid_at").eq("student_id", pay.student_id).eq("session_id", pay.session?.id ?? "").eq("status", "successful").eq("purpose", pay.purpose),
       ]);
       const stu = s as unknown as Student;
       setP(pay); setSt(stu);
@@ -46,14 +48,18 @@ function Receipt() {
 
   if (err) return <p className="text-sm text-bad">{err}</p>;
   if (!p || !st) return <p className="text-sm text-ink-3">Loading…</p>;
-  const due = fees.reduce((a, f) => a + Number(f.amount), 0);
+  const hostel = p.purpose === "hostel";
+  const items = hostel
+    ? [{ name: `Hostel accommodation · ${p.allocation?.hostel?.name ?? ""}, room ${p.allocation?.bed?.room?.name ?? ""}, bed ${p.allocation?.bed?.label ?? ""} (${p.allocation?.bed?.room?.room_type ?? ""})`, amount: Number(p.allocation?.amount ?? p.amount) }]
+    : fees;
+  const due = items.reduce((a, f) => a + Number(f.amount), 0);
   const ok = p.status === "successful";
 
   return (
     <>
       {!ok && <Watermark text={p.status === "pending" ? "Not confirmed" : "Not paid"} />}
       <Letterhead university={profile?.tenant?.name ?? ""} short={profile?.tenant?.short_name} title={ok ? "Official Receipt" : "Payment Record"}
-        subtitle={`School fees · ${p.session?.name} Session`} right={<>Receipt no. <span className="font-mono">{p.reference}</span><br />Printed {printedOn()}</>} />
+        subtitle={`${hostel ? "Hostel fee" : "School fees"} · ${p.session?.name} Session`} right={<>Receipt no. <span className="font-mono">{p.reference}</span><br />Printed {printedOn()}</>} />
 
       <table className="tbl mb-4">
         <tbody>
@@ -65,11 +71,11 @@ function Receipt() {
         </tbody>
       </table>
 
-      <h2 className="mb-1 text-xs font-bold uppercase tracking-wide">Fees for the {p.session?.name} session</h2>
+      <h2 className="mb-1 text-xs font-bold uppercase tracking-wide">{hostel ? "Hostel fee" : "Fees"} for the {p.session?.name} session</h2>
       <table className="tbl">
         <thead><tr><th>Item</th><th className="num w-32">Amount</th></tr></thead>
         <tbody>
-          {fees.map((f, i) => <tr key={i}><td>{f.name}</td><td className="num">{naira(f.amount)}</td></tr>)}
+          {items.map((f, i) => <tr key={i}><td>{f.name}</td><td className="num">{naira(f.amount)}</td></tr>)}
           <tr><td className="num font-semibold">Total due</td><td className="num font-semibold">{naira(due)}</td></tr>
           <tr><td className="num">Paid to date{ok ? " (including this payment)" : ""}</td><td className="num">{naira(paidTotal)}</td></tr>
           <tr><td className="num font-semibold">Balance</td><td className="num font-semibold">{naira(Math.max(0, due - paidTotal))}</td></tr>
@@ -89,5 +95,5 @@ function Receipt() {
 }
 
 export default function Page() {
-  return <PrintShell allow={["student", "bursar", "registrar", "admin"]} title="Payment receipt"><Receipt /></PrintShell>;
+  return <PrintShell allow={["student", "bursar", "registrar", "admin", "hostel_officer"]} title="Payment receipt"><Receipt /></PrintShell>;
 }

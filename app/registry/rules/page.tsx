@@ -5,7 +5,7 @@ import { Shell, useAuth } from "@/components/auth";
 import { Card, PageHead, Button, Notice, Field } from "@/components/ui";
 import { supabase, errMsg } from "@/lib/supabase";
 
-type Settings = { min_units: number; max_units: number; ca_max: number; exam_max: number; probation_cgpa: number; withdraw_after_probation: number; require_fees_for_registration: boolean; allow_demo_payments: boolean };
+type Settings = { min_units: number; max_units: number; ca_max: number; exam_max: number; probation_cgpa: number; withdraw_after_probation: number; require_fees_for_registration: boolean; allow_demo_payments: boolean; cgpa_attempt_policy: "all" | "best" };
 type Band = { id?: string; grade: string; min_score: number; points: number };
 type Cls = { id?: string; name: string; min_cgpa: number };
 
@@ -17,14 +17,16 @@ function Rules() {
   const [orig, setOrig] = useState<{ bands: string[]; classes: string[] }>({ bands: [], classes: [] });
   const [msg, setMsg] = useState<{ kind: "error" | "success"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [savedPolicy, setSavedPolicy] = useState<"all" | "best">("all");
 
   const load = useCallback(async () => {
     const [st, b, c] = await Promise.all([
-      supabase.from("uni_settings").select("min_units, max_units, ca_max, exam_max, probation_cgpa, withdraw_after_probation, require_fees_for_registration, allow_demo_payments").single(),
+      supabase.from("uni_settings").select("min_units, max_units, ca_max, exam_max, probation_cgpa, withdraw_after_probation, require_fees_for_registration, allow_demo_payments, cgpa_attempt_policy").single(),
       supabase.from("uni_grade_bands").select("id, grade, min_score, points").order("min_score", { ascending: false }),
       supabase.from("uni_degree_classes").select("id, name, min_cgpa").order("min_cgpa", { ascending: false }),
     ]);
     if (st.data) setS({ ...st.data, ca_max: Number(st.data.ca_max), exam_max: Number(st.data.exam_max), probation_cgpa: Number(st.data.probation_cgpa) });
+    if (st.data) setSavedPolicy(st.data.cgpa_attempt_policy);
     const bl = ((b.data as Band[]) ?? []).map((x) => ({ ...x, min_score: Number(x.min_score), points: Number(x.points) }));
     const cl = ((c.data as Cls[]) ?? []).map((x) => ({ ...x, min_cgpa: Number(x.min_cgpa) }));
     setBands(bl); setClasses(cl);
@@ -49,9 +51,12 @@ function Rules() {
 
   async function saveSettings() {
     if (!s || !profile) return;
+    if (s.cgpa_attempt_policy !== savedPolicy &&
+        !confirm("Changing how attempts count recalculates every student's CGPA and academic standing, including on released results and transcripts. Graduated students keep the class already confirmed. Continue?")) return;
     setBusy(true); setMsg(null);
     const { error } = await supabase.from("uni_settings").update(s).eq("tenant_id", profile.tenant_id);
     setBusy(false);
+    if (!error) setSavedPolicy(s.cgpa_attempt_policy);
     setMsg(error ? { kind: "error", text: errMsg(error) } : { kind: "success", text: "Registration and scoring rules saved." });
   }
 
@@ -89,6 +94,12 @@ function Rules() {
           <Field label="Maximum credit units per semester"><input className="input w-full" type="number" min={1} value={s.max_units} onChange={(e) => setS({ ...s, max_units: num(e.target.value) })} /></Field>
           <Field label="Probation below CGPA"><input className="input w-full" type="number" step="0.01" min={0} max={5} value={s.probation_cgpa} onChange={(e) => setS({ ...s, probation_cgpa: num(e.target.value) })} /></Field>
           <Field label="Recommend withdrawal after" hint="consecutive semesters on probation"><input className="input w-full" type="number" min={1} max={6} value={s.withdraw_after_probation} onChange={(e) => setS({ ...s, withdraw_after_probation: num(e.target.value) })} /></Field>
+          <Field label="Repeated courses in CGPA" hint={s.cgpa_attempt_policy === "all" ? "A failed attempt still counts after the student passes the retake" : "Only the best grade at each course counts; earlier failed attempts drop out"}>
+            <select className="input w-full" value={s.cgpa_attempt_policy} onChange={(e) => setS({ ...s, cgpa_attempt_policy: e.target.value as "all" | "best" })}>
+              <option value="all">Every attempt counts (default)</option>
+              <option value="best">Best attempt only</option>
+            </select>
+          </Field>
           <Field label="Continuous assessment (CA) out of"><input className="input w-full" type="number" min={0} max={100} value={s.ca_max} onChange={(e) => setS({ ...s, ca_max: num(e.target.value) })} /></Field>
           <Field label="Examination out of"><input className="input w-full" type="number" min={0} max={100} value={s.exam_max} onChange={(e) => setS({ ...s, exam_max: num(e.target.value) })} /></Field>
           <label className="flex items-center gap-2 self-end pb-2 text-sm">

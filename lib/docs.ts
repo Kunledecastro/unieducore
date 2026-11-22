@@ -14,23 +14,33 @@ export const resultCols =
 /** Chronological order of semesters: by session name (e.g. 2025/2026) then semester number. */
 export const semKey = (r: { session_name: string; semester_number: number }) => `${r.session_name}#${r.semester_number}`;
 
+export type AttemptPolicy = "all" | "best";
+export const policyNote = (p: AttemptPolicy) =>
+  p === "best" ? "CGPA counts only the best attempt at each course." : "CGPA counts every attempt at a course, including failed attempts later retaken.";
+
 export type Summary = { tcu: number; tgp: number; gpa: number | null; cumTcu: number; cumTgp: number; cgpa: number | null; outstanding: string[] };
 
 /**
  * GPA for one semester and CGPA up to and including it, for one student's rows.
  * Only graded rows count. A failed course stays "outstanding" until a later pass.
+ * policy "all": every attempt counts towards CGPA; "best": only the best attempt so far at each course.
  */
-export function summarise(rows: ResultRow[], uptoKey: string): Summary {
+export function summarise(rows: ResultRow[], uptoKey: string, policy: AttemptPolicy = "all"): Summary {
   const graded = rows.filter((r) => r.grade !== null && r.points !== null);
   const cur = graded.filter((r) => semKey(r) === uptoKey);
   const cum = graded.filter((r) => semKey(r) <= uptoKey);
   const tcu = cur.reduce((a, r) => a + r.units, 0);
   const tgp = cur.reduce((a, r) => a + r.units * Number(r.points), 0);
-  const cumTcu = cum.reduce((a, r) => a + r.units, 0);
-  const cumTgp = cum.reduce((a, r) => a + r.units * Number(r.points), 0);
-  const best = new Map<string, { code: string; pts: number }>();
-  cum.forEach((r) => { const b = best.get(r.course_id); if (!b || Number(r.points) > b.pts) best.set(r.course_id, { code: r.code, pts: Number(r.points) }); });
-  const outstanding = [...best.values()].filter((b) => b.pts === 0).map((b) => b.code).sort();
+  // best attempt per course: highest points, latest semester on a tie
+  const best = new Map<string, ResultRow>();
+  cum.forEach((r) => {
+    const b = best.get(r.course_id);
+    if (!b || Number(r.points) > Number(b.points) || (Number(r.points) === Number(b.points) && semKey(r) > semKey(b))) best.set(r.course_id, r);
+  });
+  const counted = policy === "best" ? [...best.values()] : cum;
+  const cumTcu = counted.reduce((a, r) => a + r.units, 0);
+  const cumTgp = counted.reduce((a, r) => a + r.units * Number(r.points), 0);
+  const outstanding = [...best.values()].filter((b) => Number(b.points) === 0).map((b) => b.code).sort();
   return {
     tcu, tgp, gpa: tcu ? Math.round((tgp / tcu) * 100) / 100 : null,
     cumTcu, cumTgp, cgpa: cumTcu ? Math.round((cumTgp / cumTcu) * 100) / 100 : null, outstanding,

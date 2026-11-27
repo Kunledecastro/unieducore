@@ -1,6 +1,6 @@
 // UniEducore user administration (Registry/admin only).
 // Runs server-side with the service role, so account creation never needs elevated keys in the browser.
-// Actions: create_user, bulk_create_students, reset_password, set_active
+// Actions: create_user, bulk_create_students, reset_password, reset_mfa, set_active
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
 
 const cors = {
@@ -20,6 +20,14 @@ function tempPassword() {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
   const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
   return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8, 12)}`;
+}
+
+/** Assurance level in a token that getUser has already verified: "aal2" once the person entered an authenticator code. */
+function tokenAal(token: string): string {
+  try {
+    const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(part + "=".repeat((4 - (part.length % 4)) % 4))).aal ?? "aal1";
+  } catch { return "aal1"; }
 }
 
 const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -146,6 +154,10 @@ Deno.serve(async (req) => {
     return json({ error: "Only the Registry can manage user accounts" }, 403);
   }
   const me = meRow as unknown as Me;
+  const { data: set } = await db.from("uni_settings").select("require_mfa_for_admins").eq("tenant_id", me.tenant_id).maybeSingle();
+  if (set?.require_mfa_for_admins && tokenAal(token) !== "aal2") {
+    return json({ error: "Enter your two-factor code first: sign out and sign in again" }, 403);
+  }
 
   let body: Record<string, unknown>;
   try { body = await req.json(); } catch { return json({ error: "Invalid request" }, 400); }
@@ -188,6 +200,20 @@ Deno.serve(async (req) => {
         await db.from("uni_profiles").update({ must_change_password: true }).eq("id", t.id);
         await audit(db, me, "RESET_PASSWORD", t.id, { email: t.email });
         return json({ ok: true, email: t.email, temp_password: password });
+      }
+
+      case "reset_mfa": {
+        const t = await targetInTenant(db, me, String(body.user_id));
+        const { data: list, error: le } = await db.auth.admin.mfa.listFactors({ userId: t.id });
+        if (le) throw le;
+        let removed = 0;
+        for (const f of list?.factors ?? []) {
+          const { error } = await db.auth.admin.mfa.deleteFactor({ id: f.id, userId: t.id });
+          if (error) throw error;
+          removed++;
+        }
+        await audit(db, me, "RESET_MFA", t.id, { email: t.email, removed });
+        return json({ ok: true, removed });
       }
 
       case "set_active": {

@@ -5,7 +5,7 @@ import { Shell, useAuth } from "@/components/auth";
 import { Card, PageHead, Button, Notice, Field } from "@/components/ui";
 import { supabase, errMsg } from "@/lib/supabase";
 
-type Settings = { min_units: number; max_units: number; ca_max: number; exam_max: number; probation_cgpa: number; withdraw_after_probation: number; require_fees_for_registration: boolean; allow_demo_payments: boolean; cgpa_attempt_policy: "all" | "best" };
+type Settings = { min_units: number; max_units: number; ca_max: number; exam_max: number; probation_cgpa: number; withdraw_after_probation: number; require_fees_for_registration: boolean; allow_demo_payments: boolean; cgpa_attempt_policy: "all" | "best"; require_mfa_for_admins: boolean };
 type Band = { id?: string; grade: string; min_score: number; points: number };
 type Cls = { id?: string; name: string; min_cgpa: number };
 
@@ -21,7 +21,7 @@ function Rules() {
 
   const load = useCallback(async () => {
     const [st, b, c] = await Promise.all([
-      supabase.from("uni_settings").select("min_units, max_units, ca_max, exam_max, probation_cgpa, withdraw_after_probation, require_fees_for_registration, allow_demo_payments, cgpa_attempt_policy").single(),
+      supabase.from("uni_settings").select("min_units, max_units, ca_max, exam_max, probation_cgpa, withdraw_after_probation, require_fees_for_registration, allow_demo_payments, cgpa_attempt_policy, require_mfa_for_admins").single(),
       supabase.from("uni_grade_bands").select("id, grade, min_score, points").order("min_score", { ascending: false }),
       supabase.from("uni_degree_classes").select("id, name, min_cgpa").order("min_cgpa", { ascending: false }),
     ]);
@@ -105,6 +105,10 @@ function Rules() {
           <label className="flex items-center gap-2 self-end pb-2 text-sm">
             <input type="checkbox" className="accent-brand h-4 w-4" checked={s.require_fees_for_registration} onChange={(e) => setS({ ...s, require_fees_for_registration: e.target.checked })} />
             Students must pay fees before registering courses
+          </label>
+          <label className="flex items-start gap-2 self-end pb-2 text-sm sm:col-span-3">
+            <input type="checkbox" className="accent-brand mt-0.5 h-4 w-4" checked={s.require_mfa_for_admins} onChange={(e) => setS({ ...s, require_mfa_for_admins: e.target.checked })} />
+            <span>Registry, Bursary and administrators must use two-factor sign-in <span className="block text-xs text-ink-3">Each of them sets up an authenticator app at their next sign-in and enters a code every time after. Set yours up first under Account, or you will be asked to straight after saving.</span></span>
           </label>
           <label className="flex items-start gap-2 self-end pb-2 text-sm sm:col-span-3">
             <input type="checkbox" className="accent-brand mt-0.5 h-4 w-4" checked={s.allow_demo_payments} onChange={(e) => setS({ ...s, allow_demo_payments: e.target.checked })} />

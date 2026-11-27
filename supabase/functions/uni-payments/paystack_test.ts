@@ -1,5 +1,5 @@
 import { deepStrictEqual as assertEquals } from "node:assert";
-import { decide, safeCallback, toKobo, verifySignature } from "./paystack.ts";
+import { decide, safeCallback, toKobo, tokenAal, verifySignature } from "./paystack.ts";
 
 Deno.test("naira to kobo has no floating-point drift", () => {
   assertEquals(toKobo(540000), 54000000);
@@ -35,4 +35,12 @@ Deno.test("students are only sent back to our own app", () => {
   assertEquals(safeCallback("https://unieducore.vercel.app.evil.com/"), null);
   assertEquals(safeCallback("http://unieducore.vercel.app/"), null);
   assertEquals(safeCallback(42), null);
+});
+
+Deno.test("tokenAal reads the assurance level from a verified token", () => {
+  const enc = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+  assertEquals(tokenAal(`h.${enc({ sub: "u", aal: "aal2" })}.s`), "aal2");
+  assertEquals(tokenAal(`h.${enc({ sub: "u", aal: "aal1" })}.s`), "aal1");
+  assertEquals(tokenAal(`h.${enc({ sub: "u" })}.s`), "aal1");
+  assertEquals(tokenAal("garbage"), "aal1");
 });

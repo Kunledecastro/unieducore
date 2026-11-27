@@ -72,6 +72,14 @@ function StaffPage() {
     } catch (e) { setMsg({ kind: "error", text: errMsg(e) }); }
   }
 
+  async function resetMfa(s: Staff) {
+    if (!confirm(`Reset two-factor sign-in for ${s.full_name}? Their authenticator stops working and they set up a new one at their next sign-in.`)) return;
+    try {
+      const out = await adminCall<{ removed: number }>({ action: "reset_mfa", user_id: s.id });
+      setMsg({ kind: "success", text: out.removed ? `Two-factor sign-in reset for ${s.full_name}.` : `${s.full_name} had no authenticator set up.` });
+    } catch (e) { setMsg({ kind: "error", text: errMsg(e) }); }
+  }
+
   async function toggleActive(s: Staff) {
     if (!confirm(s.is_active ? `Deactivate ${s.full_name}? They will be signed out and unable to sign in.` : `Reactivate ${s.full_name}?`)) return;
     try {
@@ -109,6 +117,7 @@ function StaffPage() {
                   {s.id !== profile?.id && (s.role !== "admin" || profile?.role === "admin") && <>
                     <button className="mr-3 text-xs text-brand hover:underline" onClick={() => setForm({ id: s.id, full_name: s.full_name, email: s.email, role: s.role, department_id: s.department_id ?? depts[0]?.id ?? "", hostel_id: s.hostel_id ?? halls[0]?.id ?? "" })}>Edit</button>
                     <button className="mr-3 text-xs text-brand hover:underline" onClick={() => reset(s)}>Reset password</button>
+                    <button className="mr-3 text-xs text-brand hover:underline" onClick={() => resetMfa(s)}>Reset two-factor</button>
                     <button className={`text-xs hover:underline ${s.is_active ? "text-bad" : "text-good"}`} onClick={() => toggleActive(s)}>{s.is_active ? "Deactivate" : "Reactivate"}</button>
                   </>}
                   {s.id === profile?.id && <span className="text-xs text-ink-3">You</span>}

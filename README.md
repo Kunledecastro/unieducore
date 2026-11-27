@@ -117,9 +117,16 @@ Row Level Security: everything is scoped by tenant (university); students see on
 ## Security
 See [docs/SECURITY_REVIEW.md](docs/SECURITY_REVIEW.md) (22 Nov 2026). Key guarantees enforced in the database: result approvals only move through the workflow functions; graduation is set only by Confirm graduation; scores are visible only to the course lecturer, the relevant HOD, the Registry and (once released) the student; deactivated accounts lose access immediately; every change is audited with the person who made it. New `uni_` tables must revoke privileges from `anon` (Supabase grants them by default).
 
+## Two-factor sign-in
+- Anyone can turn on an authenticator app under **Account** (top right): after the password they enter a 6-digit code.
+- Rules → "Registry, Bursary and administrators must use two-factor sign-in" makes it compulsory for those roles at that university (`uni_settings.require_mfa_for_admins`, off by default). They are sent to set up an authenticator at their next sign-in.
+- Enforced in the database, not just the screens: until the session is verified with a code (`aal2`), those roles get no privileges (the role helpers used by every policy and workflow function treat them as having none), and the edge functions refuse them. Switching the rule off also needs a verified session.
+- Lost phone: Registry → Staff → **Reset two-factor** removes the person's authenticator; they set up a new one at next sign-in.
+- New universities start with demo payments switched off (`allow_demo_payments` defaults to false); the demo university keeps them on.
+
 ## Before the pilot (needs the project owner)
 - Supabase Auth: turn on leaked-password protection, turn off public sign-ups, consider a shorter JWT expiry
 - Rules: switch off "Allow demo payments"
 - Move from the shared `educore-greenfield` project to a dedicated Supabase project (Pro plan)
-- MFA for Registry and Bursary accounts
+- Turn on "two-factor sign-in" under Rules at the pilot university
 - Add the Paystack secret key when ready

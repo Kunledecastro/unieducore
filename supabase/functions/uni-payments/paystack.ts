@@ -45,3 +45,11 @@ export function safeCallback(url: unknown): string | null {
 }
 
 export const newReference = () => `UNI-${crypto.randomUUID().replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+
+/** Assurance level in a token that getUser has already verified: "aal2" once the person entered an authenticator code. */
+export function tokenAal(token: string): string {
+  try {
+    const part = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(part + "=".repeat((4 - (part.length % 4)) % 4))).aal ?? "aal1";
+  } catch { return "aal1"; }
+}

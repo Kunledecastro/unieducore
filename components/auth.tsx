@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase, roleHome, type Profile, type Role } from "@/lib/supabase";
 
-type Ctx = { profile: Profile | null; loading: boolean; signOut: () => Promise<void>; refresh: () => Promise<void> };
-const AuthCtx = createContext<Ctx>({ profile: null, loading: true, signOut: async () => {}, refresh: async () => {} });
+/** ok: nothing more needed · challenge: enter an authenticator code · enrol: this role must set up an authenticator first */
+export type MfaState = "ok" | "challenge" | "enrol";
+type Ctx = { profile: Profile | null; loading: boolean; mfa: MfaState; signOut: () => Promise<void>; refresh: () => Promise<void> };
+const AuthCtx = createContext<Ctx>({ profile: null, loading: true, mfa: "ok", signOut: async () => {}, refresh: async () => {} });
 export const useAuth = () => useContext(AuthCtx);
 
 async function loadProfile(): Promise<Profile | null> {
@@ -20,24 +22,39 @@ async function loadProfile(): Promise<Profile | null> {
   return (data as unknown as Profile) ?? null;
 }
 
+async function loadMfa(): Promise<MfaState> {
+  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (!aal) return "ok";
+  if (aal.currentLevel === "aal2") return "ok";
+  if (aal.nextLevel === "aal2") return "challenge"; // has a verified authenticator: always ask for the code
+  const { data: required } = await supabase.rpc("uni_mfa_required");
+  return required ? "enrol" : "ok";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mfa, setMfa] = useState<MfaState>("ok");
 
   useEffect(() => {
-    loadProfile().then((p) => { setProfile(p); setLoading(false); });
+    const load = async () => {
+      const p = await loadProfile();
+      setMfa(p ? await loadMfa() : "ok");
+      setProfile(p); setLoading(false);
+    };
+    load();
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "MFA_CHALLENGE_VERIFIED") {
         setLoading(true);
-        loadProfile().then((p) => { setProfile(p); setLoading(false); });
+        setTimeout(load, 0); // run outside the auth callback, as Supabase recommends
       }
     });
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  const signOut = async () => { await supabase.auth.signOut(); setProfile(null); };
-  const refresh = async () => { setProfile(await loadProfile()); };
-  return <AuthCtx.Provider value={{ profile, loading, signOut, refresh }}>{children}</AuthCtx.Provider>;
+  const signOut = async () => { await supabase.auth.signOut(); setProfile(null); setMfa("ok"); };
+  const refresh = async () => { const p = await loadProfile(); setMfa(p ? await loadMfa() : "ok"); setProfile(p); };
+  return <AuthCtx.Provider value={{ profile, loading, mfa, signOut, refresh }}>{children}</AuthCtx.Provider>;
 }
 
 const registryNav = [
@@ -68,18 +85,20 @@ const roleName: Record<Role, string> = {
 };
 
 export function Shell({ allow, children }: { allow: Role[]; children: ReactNode }) {
-  const { profile, loading, signOut } = useAuth();
+  const { profile, loading, mfa, signOut } = useAuth();
   const router = useRouter();
   const path = usePathname();
 
   useEffect(() => {
     if (loading) return;
     if (!profile) router.replace("/login");
+    else if (mfa === "challenge") router.replace("/account/mfa");
     else if (profile.must_change_password) router.replace("/account/password");
+    else if (mfa === "enrol") router.replace("/account/security?required=1");
     else if (!allow.includes(profile.role)) router.replace(roleHome[profile.role]);
-  }, [loading, profile, allow, router]);
+  }, [loading, profile, mfa, allow, router]);
 
-  if (loading || !profile || profile.must_change_password || !allow.includes(profile.role)) {
+  if (loading || !profile || mfa !== "ok" || profile.must_change_password || !allow.includes(profile.role)) {
     return <div className="min-h-screen grid place-items-center text-sm text-ink-3">Loading…</div>;
   }
 
@@ -110,7 +129,7 @@ export function Shell({ allow, children }: { allow: Role[]; children: ReactNode 
               <span className="block text-ink">{profile.full_name}</span>
               <span className="block text-xs text-ink-3">{roleName[profile.role]}{profile.department ? ` · ${profile.department.code}` : ""}{profile.hostel ? ` · ${profile.hostel.name}` : ""}</span>
             </span>
-            <Link href="/account/password" className="text-ink-3 hover:text-ink text-xs">Password</Link>
+            <Link href="/account/security" className="text-ink-3 hover:text-ink text-xs">Account</Link>
             <button onClick={async () => { await signOut(); router.replace("/login"); }}
               className="rounded-md border border-line px-3 py-1.5 text-ink-2 hover:bg-mute">Sign out</button>
           </div>

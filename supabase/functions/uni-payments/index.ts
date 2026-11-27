@@ -4,7 +4,7 @@
 // The Paystack secret key lives only in the PAYSTACK_SECRET_KEY function secret; until it is set,
 // "status" reports online payment as not configured and the app keeps the demo flow.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2.57.4";
-import { decide, newReference, safeCallback, toKobo, verifySignature, type Tx } from "./paystack.ts";
+import { decide, newReference, safeCallback, toKobo, tokenAal, verifySignature, type Tx } from "./paystack.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -146,7 +146,8 @@ Deno.serve(async (req) => {
       const reference = String(body.reference ?? "");
       const { data: p } = await db.from("uni_payments").select("id, tenant_id, student_id, amount, status, reference, channel, purpose").eq("reference", reference).maybeSingle();
       if (!p || p.tenant_id !== me.tenant_id) return json({ error: "Payment not found" }, 404);
-      const staff = ["bursar", "registrar", "admin"].includes(me.role);
+      const { data: set } = await db.from("uni_settings").select("require_mfa_for_admins").eq("tenant_id", me.tenant_id).maybeSingle();
+      const staff = ["bursar", "registrar", "admin"].includes(me.role) && (!set?.require_mfa_for_admins || tokenAal(token) === "aal2");
       if (p.student_id !== me.id && !staff) return json({ error: "Payment not found" }, 404);
       if (p.status === "successful" || p.channel !== "paystack") return json({ ok: true, status: p.status, amount: p.amount, reference, purpose: p.purpose });
       if (!SECRET) return json({ error: "Online payment is not set up" }, 503);

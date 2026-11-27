@@ -7,17 +7,19 @@ import type { Role } from "@/lib/supabase";
 
 /** Wrapper for printable documents: checks sign-in and role, shows a toolbar that is hidden when printing. */
 export function PrintShell({ allow, landscape, title, children }: { allow: Role[]; landscape?: boolean; title: string; children: ReactNode }) {
-  const { profile, loading } = useAuth();
+  const { profile, loading, mfa } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
     if (!profile) router.replace("/login");
+    else if (mfa === "challenge") router.replace("/account/mfa");
+    else if (mfa === "enrol") router.replace("/account/security?required=1");
     else if (profile.must_change_password) router.replace("/account/password");
-  }, [loading, profile, router]);
+  }, [loading, profile, mfa, router]);
   useEffect(() => { document.title = title; }, [title]);
 
-  if (loading || !profile) return <div className="min-h-screen grid place-items-center text-sm text-ink-3">Loading…</div>;
+  if (loading || !profile || mfa !== "ok") return <div className="min-h-screen grid place-items-center text-sm text-ink-3">Loading…</div>;
   if (!allow.includes(profile.role)) return <div className="min-h-screen grid place-items-center text-sm text-ink-3">You do not have access to this document.</div>;
 
   return (
